@@ -44,3 +44,7 @@ After each code or documentation change, commit the change and push to the remot
 
 `README.md` is the default English document and `README.zh-CN.md` is the Chinese document.
 When updating `README.md`, sync equivalent changes to `README.zh-CN.md` in the same update.
+
+## Context Handoff Rule
+
+When context utilization reaches a critical level (target 40% to 60%), summarize the current goal, approaches taken, completed steps, and remaining issues into a handoff file (usually `progress.md`), then start a clean new session and reload that file.
