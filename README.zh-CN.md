@@ -19,27 +19,65 @@
 ## v1 范围
 
 - 同步方向：**仅 Apple Notes -> Obsidian**
-- 不回写 Apple Notes
+- 仅支持一个配置文件夹
+- 删除策略为 tombstone（不自动删除 Obsidian 文件）
 - 优先保证在 macOS 上后台稳定同步
-
-## v1 形态
-
-- 本地 CLI 同步引擎
-- `launchd`（LaunchAgent）定时后台执行
-
-相比先做 Obsidian 插件或桌面 GUI，这个方案更稳定、对应用生命周期依赖更小。
 
 ## v1 技术栈
 
-- `Python 3.12`：同步核心逻辑
-- `osascript`（JXA/AppleScript）：读取 Apple Notes
-- `SQLite`：同步状态与增量索引
-- `launchd`：后台调度
-- Markdown + 资源文件：写入 Obsidian 仓库
+- `Python 3.12`
+- `osascript`（JXA/AppleScript）
+- `SQLite`
+- `launchd`（LaunchAgent）
+- Markdown + 资源文件
 
-## v1 质量标准
+## 安装
 
-- 稳定优先
-- 富文本样式可在必要时降级为 Markdown
-- 图片同步必须成功
-- 必须具备增量同步与可观测日志
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+## 初始化配置
+
+```bash
+inote2obsidian init-config --output ./config.yaml
+```
+
+然后编辑 `config.yaml`，至少配置：
+- `apple_notes.folder_name`
+- `obsidian.vault_path`
+- `state.db_path`
+- `logging.file_path`
+
+## 常用命令
+
+```bash
+inote2obsidian doctor --config ./config.yaml
+inote2obsidian sync --config ./config.yaml
+inote2obsidian status --config ./config.yaml
+```
+
+## launchd（每 5 分钟）
+
+```bash
+scripts/install_launchd.sh \
+  "$PWD/.venv/bin/python" \
+  "$PWD/config.yaml" \
+  "$PWD/.inote2obsidian/stdout.log" \
+  "$PWD/.inote2obsidian/stderr.log" \
+  "$HOME/Library/LaunchAgents/com.inote2obsidian.sync.plist"
+```
+
+卸载：
+
+```bash
+scripts/uninstall_launchd.sh "$HOME/Library/LaunchAgents/com.inote2obsidian.sync.plist"
+```
+
+## 说明
+
+- 首次运行可能出现 macOS Automation 授权弹窗，需要允许访问 Notes。
+- v1 以可靠性优先，富文本可能降级为普通 Markdown。
+- Apple Notes 附件提取在不同环境下可能需要进一步调优。
