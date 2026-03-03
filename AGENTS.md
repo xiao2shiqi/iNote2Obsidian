@@ -39,3 +39,8 @@ When discussing product scope, use Socratic questioning to clarify assumptions, 
 ## Git Workflow Rule
 
 After each code or documentation change, commit the change and push to the remote repository.
+
+## README Sync Rule
+
+`README.md` is the default English document and `README.zh-CN.md` is the Chinese document.
+When updating `README.md`, sync equivalent changes to `README.zh-CN.md` in the same update.
