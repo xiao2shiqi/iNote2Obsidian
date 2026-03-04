@@ -12,10 +12,22 @@ from inote2obsidian.parser import (
 )
 
 
-def build_md_filename(note_id: str, title: str) -> str:
+def _filename_timestamp(updated_at: str) -> str:
+    try:
+        dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def build_md_filename(note_id: str, title: str, updated_at: str) -> str:
+    ts = _filename_timestamp(updated_at)
     safe_id = sanitize_note_id(note_id)
     slug = slugify_title(title)
-    return f"{safe_id}--{slug}.md"
+    return f"{ts}--{safe_id}--{slug}.md"
 
 
 def _frontmatter(note: SourceNote, now_iso: str, is_deleted: bool) -> str:
@@ -39,7 +51,7 @@ def _join_rel(*parts: str) -> str:
 
 def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso: str | None = None) -> RenderedNote:
     now_iso = now_iso or datetime.now(timezone.utc).isoformat()
-    md_filename = build_md_filename(note.note_id, note.title)
+    md_filename = build_md_filename(note.note_id, note.title, note.updated_at)
     safe_id = sanitize_note_id(note.note_id)
     folder_rel = note.folder_name.strip("/") if note.folder_name else "Unknown"
     md_rel_path = _join_rel(notes_subdir, folder_rel, md_filename)
