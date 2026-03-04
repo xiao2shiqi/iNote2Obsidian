@@ -4,7 +4,8 @@ from inote2obsidian.transform import build_md_filename, render_note
 
 def test_slug_and_filename_stability() -> None:
     filename = build_md_filename("note-1", "My Diary: Day 1!")
-    assert filename == "note-1--my-diary-day-1.md"
+    assert filename.startswith("note-1-")
+    assert filename.endswith("--my-diary-day-1.md")
 
 
 def test_frontmatter_and_asset_reference() -> None:
@@ -22,4 +23,5 @@ def test_frontmatter_and_asset_reference() -> None:
     rendered = render_note(note, "AppleNotes", "AppleNotes/_assets", now_iso="2026-03-03T01:00:00+00:00")
     assert 'source_note_id: "n1"' in rendered.md_text
     assert "is_deleted_in_source: false" in rendered.md_text
-    assert "![img.png](AppleNotes/_assets/n1/img.png)" in rendered.md_text
+    assert rendered.md_rel_path == "AppleNotes/Diary/n1-40b3eab6--title.md"
+    assert "![img.png](AppleNotes/_assets/Diary/n1-40b3eab6/img.png)" in rendered.md_text

@@ -5,12 +5,17 @@ import hashlib
 from datetime import datetime, timezone
 
 from inote2obsidian.models import AssetToWrite, RenderedNote, SourceNote
-from inote2obsidian.parser import slugify_title
+from inote2obsidian.parser import (
+    sanitize_note_id,
+    sanitize_path_segment,
+    slugify_title,
+)
 
 
 def build_md_filename(note_id: str, title: str) -> str:
+    safe_id = sanitize_note_id(note_id)
     slug = slugify_title(title)
-    return f"{note_id}--{slug}.md"
+    return f"{safe_id}--{slug}.md"
 
 
 def _frontmatter(note: SourceNote, now_iso: str, is_deleted: bool) -> str:
@@ -30,7 +35,9 @@ def _frontmatter(note: SourceNote, now_iso: str, is_deleted: bool) -> str:
 def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso: str | None = None) -> RenderedNote:
     now_iso = now_iso or datetime.now(timezone.utc).isoformat()
     md_filename = build_md_filename(note.note_id, note.title)
-    md_rel_path = f"{notes_subdir.rstrip('/')}/{md_filename}"
+    safe_id = sanitize_note_id(note.note_id)
+    folder_rel = note.folder_name.strip("/") if note.folder_name else "Unknown"
+    md_rel_path = f"{notes_subdir.rstrip('/')}/{folder_rel}/{md_filename}"
 
     lines: list[str] = [_frontmatter(note, now_iso, False), ""]
     body = note.body_plain.strip()
@@ -39,8 +46,8 @@ def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso
 
     assets_to_write: list[AssetToWrite] = []
     for idx, attachment in enumerate(note.attachments, start=1):
-        filename = attachment.filename or f"asset-{idx}"
-        asset_rel = f"{assets_subdir.rstrip('/')}/{note.note_id}/{filename}"
+        filename = sanitize_path_segment(attachment.filename or f"asset-{idx}")
+        asset_rel = f"{assets_subdir.rstrip('/')}/{folder_rel}/{safe_id}/{filename}"
         assets_to_write.append(AssetToWrite(attachment=attachment, asset_rel_path=asset_rel))
         lines.append("")
         lines.append(f"![{filename}]({asset_rel})")

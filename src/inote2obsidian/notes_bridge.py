@@ -15,28 +15,64 @@ function run(argv) {
   app.includeStandardAdditions = true;
 
   var out = [];
-  var accounts = app.accounts();
-  for (var i = 0; i < accounts.length; i++) {
-    var folders = accounts[i].folders();
-    for (var j = 0; j < folders.length; j++) {
-      var folder = folders[j];
-      if (!includeAll && folder.name() !== folderName) {
-        continue;
-      }
-      var notes = folder.notes();
-      for (var k = 0; k < notes.length; k++) {
+  function collectFromFolder(folder, parentPath) {
+    var currentName = '';
+    try {
+      currentName = String(folder.name() || '');
+    } catch (e) {
+      currentName = '';
+    }
+    if (!currentName) {
+      return;
+    }
+    var currentPath = parentPath ? (parentPath + '/' + currentName) : currentName;
+
+    var notes = [];
+    try {
+      notes = folder.notes();
+    } catch (e) {
+      notes = [];
+    }
+    for (var k = 0; k < notes.length; k++) {
+      try {
         var note = notes[k];
+        var shouldInclude = includeAll || currentPath === folderName || currentPath.indexOf(folderName + '/') === 0;
+        if (!shouldInclude) {
+          continue;
+        }
         var item = {
           note_id: String(note.id()),
           title: String(note.name() || ''),
-          folder_name: String(folder.name() || ''),
+          folder_name: currentPath,
           updated_at: String(note.modificationDate()),
           body_plain: String(note.plaintext() || ''),
           body_html: String(note.body() || ''),
           attachments: []
         };
         out.push(item);
+      } catch (e) {
       }
+    }
+
+    var children = [];
+    try {
+      children = folder.folders();
+    } catch (e) {
+      children = [];
+    }
+    for (var c = 0; c < children.length; c++) {
+      try {
+        collectFromFolder(children[c], currentPath);
+      } catch (e) {
+      }
+    }
+  }
+
+  var accounts = app.accounts();
+  for (var i = 0; i < accounts.length; i++) {
+    var folders = accounts[i].folders();
+    for (var j = 0; j < folders.length; j++) {
+      collectFromFolder(folders[j], '');
     }
   }
 
