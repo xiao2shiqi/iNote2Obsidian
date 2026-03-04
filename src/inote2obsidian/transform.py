@@ -32,12 +32,17 @@ def _frontmatter(note: SourceNote, now_iso: str, is_deleted: bool) -> str:
     )
 
 
+def _join_rel(*parts: str) -> str:
+    clean = [p.strip("/") for p in parts if p and p.strip("/")]
+    return "/".join(clean)
+
+
 def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso: str | None = None) -> RenderedNote:
     now_iso = now_iso or datetime.now(timezone.utc).isoformat()
     md_filename = build_md_filename(note.note_id, note.title)
     safe_id = sanitize_note_id(note.note_id)
     folder_rel = note.folder_name.strip("/") if note.folder_name else "Unknown"
-    md_rel_path = f"{notes_subdir.rstrip('/')}/{folder_rel}/{md_filename}"
+    md_rel_path = _join_rel(notes_subdir, folder_rel, md_filename)
 
     lines: list[str] = [_frontmatter(note, now_iso, False), ""]
     body = note.body_plain.strip()
@@ -47,10 +52,10 @@ def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso
     assets_to_write: list[AssetToWrite] = []
     for idx, attachment in enumerate(note.attachments, start=1):
         filename = sanitize_path_segment(attachment.filename or f"asset-{idx}")
-        asset_rel = f"{assets_subdir.rstrip('/')}/{folder_rel}/{safe_id}/{filename}"
+        asset_rel = _join_rel(notes_subdir, folder_rel, "_attachments", safe_id, filename)
         assets_to_write.append(AssetToWrite(attachment=attachment, asset_rel_path=asset_rel))
         lines.append("")
-        lines.append(f"![{filename}]({asset_rel})")
+        lines.append(f"![{filename}](_attachments/{safe_id}/{filename})")
 
     md_text = "\n".join(lines).rstrip() + "\n"
     return RenderedNote(md_text=md_text, md_rel_path=md_rel_path, assets_to_write=assets_to_write)
