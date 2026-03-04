@@ -10,6 +10,7 @@ ObjC.import('Foundation');
 
 function run(argv) {
   var folderName = argv[0];
+  var includeAll = folderName === "*" || folderName === "__ALL__";
   var app = Application('Notes');
   app.includeStandardAdditions = true;
 
@@ -19,7 +20,7 @@ function run(argv) {
     var folders = accounts[i].folders();
     for (var j = 0; j < folders.length; j++) {
       var folder = folders[j];
-      if (folder.name() !== folderName) {
+      if (!includeAll && folder.name() !== folderName) {
         continue;
       }
       var notes = folder.notes();
@@ -28,7 +29,7 @@ function run(argv) {
         var item = {
           note_id: String(note.id()),
           title: String(note.name() || ''),
-          folder_name: folderName,
+          folder_name: String(folder.name() || ''),
           updated_at: String(note.modificationDate()),
           body_plain: String(note.plaintext() || ''),
           body_html: String(note.body() || ''),

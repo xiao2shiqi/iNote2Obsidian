@@ -88,7 +88,10 @@ def run_sync(
                     extra={"run_id": run.run_id, "note_id": note.note_id, "stage": "note"},
                 )
 
-        deleted_count = db.mark_missing_as_deleted(config.apple_notes.folder_name, source_ids)
+        if config.apple_notes.folder_name in {"*", "__ALL__"}:
+            deleted_count = db.mark_missing_as_deleted_any_folder(source_ids)
+        else:
+            deleted_count = db.mark_missing_as_deleted(config.apple_notes.folder_name, source_ids)
         stats.deleted_count += deleted_count
         if stats.error_count > 0 and status == "success":
             status = "partial"

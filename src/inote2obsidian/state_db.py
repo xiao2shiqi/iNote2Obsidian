@@ -158,3 +158,16 @@ class StateDB:
                     (_now_iso(), note_id),
                 )
         return len(to_mark)
+
+    def mark_missing_as_deleted_any_folder(self, source_ids: set[str]) -> int:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT note_id, is_deleted FROM notes_state"
+            ).fetchall()
+            to_mark = [r["note_id"] for r in rows if r["note_id"] not in source_ids and int(r["is_deleted"]) == 0]
+            for note_id in to_mark:
+                conn.execute(
+                    "UPDATE notes_state SET is_deleted = 1, last_synced_at = ? WHERE note_id = ?",
+                    (_now_iso(), note_id),
+                )
+        return len(to_mark)
