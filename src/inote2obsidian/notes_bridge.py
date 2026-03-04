@@ -44,7 +44,12 @@ function run(argv) {
           note_id: String(note.id()),
           title: String(note.name() || ''),
           folder_name: currentPath,
-          updated_at: String(note.modificationDate()),
+          updated_at: (function() {
+            try { return new Date(note.modificationDate()).toISOString(); } catch (e) { return ''; }
+          })(),
+          created_at: (function() {
+            try { return new Date(note.creationDate()).toISOString(); } catch (e) { return ''; }
+          })(),
           body_plain: String(note.plaintext() || ''),
           body_html: String(note.body() || ''),
           attachments: []
@@ -109,6 +114,7 @@ def fetch_notes_from_apple_notes(folder_name: str) -> list[SourceNote]:
                 title=str(raw.get("title", "")),
                 folder_name=str(raw.get("folder_name", folder_name)),
                 updated_at=str(raw.get("updated_at", "")),
+                created_at=str(raw.get("created_at", "")),
                 body_plain=str(raw.get("body_plain", "")),
                 body_html=str(raw.get("body_html", "")),
                 attachments=attachments,

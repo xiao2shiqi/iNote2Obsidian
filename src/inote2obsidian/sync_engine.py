@@ -48,8 +48,11 @@ def run_sync(
                     stats.skipped_count += 1
                     continue
 
-                _, written_assets = write_rendered_note(Path(config.obsidian.vault_path), rendered)
+                md_path, written_assets = write_rendered_note(
+                    Path(config.obsidian.vault_path), rendered, note.note_id
+                )
                 now_iso = datetime.now(timezone.utc).isoformat()
+                md_rel_path = str(md_path.relative_to(Path(config.obsidian.vault_path))).replace("\\", "/")
                 db.upsert_note_state(
                     NoteState(
                         note_id=note.note_id,
@@ -57,7 +60,7 @@ def run_sync(
                         title=note.title,
                         source_updated_at=note.updated_at,
                         content_hash=content_hash,
-                        md_rel_path=rendered.md_rel_path,
+                        md_rel_path=md_rel_path,
                         is_deleted=0,
                         last_synced_at=now_iso,
                     )

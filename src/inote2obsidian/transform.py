@@ -6,28 +6,24 @@ from datetime import datetime, timezone
 
 from inote2obsidian.models import AssetToWrite, RenderedNote, SourceNote
 from inote2obsidian.parser import (
-    sanitize_note_id,
     sanitize_path_segment,
-    slugify_title,
+    sanitize_note_id,
 )
 
 
-def _filename_timestamp(updated_at: str) -> str:
+def _filename_timestamp(value: str) -> str:
     try:
-        dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         dt = datetime.now(timezone.utc)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%Y-%m-%d %H-%M-%S")
 
 
-def build_md_filename(note_id: str, title: str, updated_at: str) -> str:
-    ts = _filename_timestamp(updated_at)
-    safe_id = sanitize_note_id(note_id)
-    slug = slugify_title(title)
-    return f"{ts}--{safe_id}--{slug}.md"
+def build_md_filename(created_at: str) -> str:
+    ts = _filename_timestamp(created_at)
+    return f"{ts}.md"
 
 
 def _frontmatter(note: SourceNote, now_iso: str, is_deleted: bool) -> str:
@@ -51,7 +47,7 @@ def _join_rel(*parts: str) -> str:
 
 def render_note(note: SourceNote, notes_subdir: str, assets_subdir: str, now_iso: str | None = None) -> RenderedNote:
     now_iso = now_iso or datetime.now(timezone.utc).isoformat()
-    md_filename = build_md_filename(note.note_id, note.title, note.updated_at)
+    md_filename = build_md_filename(note.created_at or note.updated_at)
     safe_id = sanitize_note_id(note.note_id)
     folder_rel = note.folder_name.strip("/") if note.folder_name else "Unknown"
     md_rel_path = _join_rel(notes_subdir, folder_rel, md_filename)
@@ -91,6 +87,7 @@ def note_fingerprint(note: SourceNote, algo: str = "sha256") -> str:
         "title": note.title,
         "folder_name": note.folder_name,
         "updated_at": note.updated_at,
+        "created_at": note.created_at,
         "body_plain": note.body_plain,
         "attachments": [
             {

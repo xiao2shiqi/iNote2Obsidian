@@ -21,7 +21,7 @@ def test_write_note_and_assets(tmp_path: Path) -> None:
         ],
     )
 
-    md_path, assets = write_rendered_note(tmp_path, rendered)
+    md_path, assets = write_rendered_note(tmp_path, rendered, "n1")
     assert md_path.exists()
     assert md_path.read_text(encoding="utf-8") == "# Hello\n"
     assert len(assets) == 1

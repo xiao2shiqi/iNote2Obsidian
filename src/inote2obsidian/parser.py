@@ -123,6 +123,7 @@ def normalize_note(note: SourceNote) -> SourceNote:
         title=title,
         folder_name=sanitize_folder_path(folder_name),
         updated_at=normalize_iso8601(note.updated_at),
+        created_at=normalize_iso8601(note.created_at or note.updated_at),
         body_plain=body_plain,
         body_html=note.body_html or "",
         attachments=attachments,

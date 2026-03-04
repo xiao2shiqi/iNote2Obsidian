@@ -22,6 +22,7 @@ class SourceNote:
     updated_at: str
     body_plain: str
     body_html: str
+    created_at: str = ""
     attachments: list[Attachment] = field(default_factory=list)
 
 
