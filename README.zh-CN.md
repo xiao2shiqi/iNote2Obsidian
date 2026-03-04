@@ -44,3 +44,14 @@
 - 使用 GitHub Actions 构建 macOS 安装产物
 - 通过 GitHub Releases 发布版本
 - 在仓库中提供直接下载安装说明
+
+## Native App 原型（当前）
+
+仓库已新增原生 macOS App 原型，目录为 `NativeApp/`。
+
+本地构建：
+
+```bash
+cd NativeApp
+swift build
+```

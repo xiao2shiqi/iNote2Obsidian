@@ -44,3 +44,14 @@ This MVP is the functional base for migration into the native macOS app architec
 - Build signed macOS installer artifacts via GitHub Actions
 - Publish app packages through GitHub Releases
 - Provide direct download/install docs in this repository
+
+## Native App Prototype (Current)
+
+A native macOS app prototype has been added under `NativeApp/`.
+
+Build locally:
+
+```bash
+cd NativeApp
+swift build
+```

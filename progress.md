@@ -60,6 +60,22 @@ A working CLI MVP exists and is used as the migration baseline.
 - State store: SQLite
 - Background scheduling: launchd
 
+## Native App Implementation Progress (Latest)
+- Added a new Swift native app workspace under `NativeApp/`.
+- Implemented menu bar app shell with:
+  - status icon states (`idle/syncing/success/failed_permission/failed_runtime`)
+  - dropdown panel (`Sync Now`, `Settings`, status summary)
+  - settings screen (output path, interval, filters, auto-start flag)
+- Implemented Swift sync pipeline modules:
+  - JXA Notes bridge with recursive folder traversal and `Recently Deleted` exclusion
+  - inline image extraction from HTML data URIs
+  - markdown renderer with timestamp naming and collision suffix strategy
+  - centralized `attachments/` output
+  - SQLite state store and incremental sync/tombstone behavior
+- Implemented scheduler and sync orchestration with silent failure status handling.
+- Added Sparkle updater integration placeholder hook for release wiring.
+- Verified the native app target builds successfully with `swift build`.
+
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)
 2. Port config/state model from Python to Swift
