@@ -55,3 +55,9 @@
 cd NativeApp
 swift build
 ```
+
+运行冒烟测试：
+
+```bash
+scripts/native_app_smoke_test.sh
+```

@@ -75,6 +75,9 @@ A working CLI MVP exists and is used as the migration baseline.
 - Implemented scheduler and sync orchestration with silent failure status handling.
 - Added Sparkle updater integration placeholder hook for release wiring.
 - Verified the native app target builds successfully with `swift build`.
+- Added smoke test script `scripts/native_app_smoke_test.sh` and verified:
+  - app builds
+  - app process launches and stays alive for 3 seconds
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)

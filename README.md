@@ -55,3 +55,9 @@ Build locally:
 cd NativeApp
 swift build
 ```
+
+Run smoke test:
+
+```bash
+scripts/native_app_smoke_test.sh
+```
