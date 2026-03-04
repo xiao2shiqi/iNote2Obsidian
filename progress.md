@@ -1,84 +1,82 @@
 # Progress
 
-## Project Goal
-Deliver a macOS-first, local, reliable sync service that continuously syncs Apple Notes to Obsidian with minimal friction.
+## Current Product Goal (Updated)
+Build iNote2Obsidian as a **native macOS desktop application** (visual app) for Apple Notes -> Obsidian sync.
 
-### v1 Target
-- One-way sync only: Apple Notes -> Obsidian
-- Reliability first (CLI + launchd), no GUI
-- Incremental sync with clear logs
-- Image sync is required
-- Markdown output can be fidelity-reduced if needed
+### Strategic Direction
+- Product form: native macOS app (SwiftUI + AppKit)
+- Sync direction: one-way (Apple Notes -> Obsidian)
+- Priorities: reliability first, UX second
+- Distribution: GitHub Releases installer package
+- Not in scope: Mac App Store distribution for now
 
-## Current Implementation Status
+## Methodology (Continuous Iteration)
+This project uses `progress.md` as the continuity document.
+Each iteration must update:
+- current goal
+- methods used
+- implemented progress
+- open issues and next actions
 
-### What is implemented
-- Python CLI app with commands:
-  - `sync`
-  - `init-config`
-  - `doctor`
-  - `status`
-- Apple Notes data fetch via `osascript` (JXA)
-- Incremental sync engine with SQLite state tables:
-  - `notes_state`
-  - `assets_state`
-  - `sync_runs`
-- Tombstone delete strategy (mark deleted in DB, do not delete target markdown)
-- Markdown writer with YAML frontmatter
-- JSON line logging for diagnostics
-- `launchd` template and install/uninstall scripts
+## What Is Already Implemented (Baseline)
+A working CLI MVP exists and is used as the migration baseline.
 
-### Folder and file behavior (current)
-- Supports full sync (`folder_name: "*"`) and single-folder sync (`folder_name: "Notes"`)
-- Output preserves Apple Notes folder hierarchy
-- For each synced note folder, attachments are placed in same-level `_attachments/` directory
-- Markdown image links use relative paths, e.g.:
-  - `![](_attachments/<note_id>/<image_file>)`
+### Implemented capabilities
+- CLI commands: `sync`, `init-config`, `doctor`, `status`
+- Apple Notes fetch via `osascript` (JXA)
+- Incremental sync with SQLite (`notes_state`, `assets_state`, `sync_runs`)
+- Markdown output with frontmatter
+- Attachment extraction for inline base64 images
+- Folder mapping and `_attachments` co-located directory strategy
+- JSON-line logs
+- launchd template and install/uninstall scripts
 
-### Image handling (current)
-- Extracts inline images from Apple Notes HTML body (`data:image/...;base64,...`)
-- Writes extracted binaries to attachment files
-- Keeps markdown-image references pointing to written files
-
-## Methods Used
-- Runtime: Python
-- Notes access: JXA via `osascript`
-- State/index: SQLite
-- Scheduling: macOS `launchd`
-- Transform pipeline:
-  1. fetch notes
-  2. normalize/parse
-  3. render markdown
-  4. write markdown + attachments atomically
-  5. update state and run statistics
-
-## Verified Results (local run)
-- Target vault path used:
-  - `/Users/phoenix/Library/Mobile Documents/com~apple~CloudDocs/note_repository/iNote`
-- After cleanup and resync of `Notes` folder:
-  - sync status: success
-  - added notes: 274
-  - errors: 0
-- Output shape confirmed:
+### Current naming and output behavior
+- Single-folder sync (`Notes`) and all-folder sync (`*`) supported
+- For `Notes` sync, output shape is:
   - `.../iNote/Notes/*.md`
   - `.../iNote/Notes/_attachments/...`
+- Markdown filename is timestamp-based (`yyyy-mm-dd hh-mm-ss.md`) using Notes creation timestamp
+- Collision handling is in place for same-second filename conflicts
 
-## Key Decisions Captured
-- English README is default: `README.md`
-- Chinese README: `README.zh-CN.md`
-- README EN updates should be mirrored to ZH in the same change
-- Every code/doc change must be committed and pushed
-- When context gets high, summarize handoff into `progress.md`
+## Verified Local Results (Latest)
+- Target path:
+  - `/Users/phoenix/Library/Mobile Documents/com~apple~CloudDocs/note_repository/iNote`
+- After cleanup + resync (`folder_name: "Notes"`):
+  - status: success
+  - added: 274
+  - errors: 0
+- Attachments are preserved and referenced with relative paths
 
-## Remaining Gaps / Next Iterations
-- Improve non-inline attachment extraction (beyond base64 inline images) where Notes/JXA exposes accessible references
-- Add stronger path sanitization and collision handling across all folder/name edge cases
-- Add integration tests on real-world Notes datasets (nested folders, many images, special characters)
-- Add launchd “production setup” guide with troubleshooting for Automation permission prompts
-- Add optional cleanup utility for legacy/old output layouts
+## Current Tech State
 
-## Suggested Next Concrete Tasks
-1. Add integration test fixtures for nested folder mapping and attachment references
-2. Implement `sync --dry-run` to preview adds/updates/deletes without writing
-3. Add `cleanup-legacy-output` command for one-time migration from old path layouts
-4. Ship a default launchd setup script tied to your current `Notes`-only config
+### Baseline engine (existing)
+- Python + JXA + SQLite + launchd
+
+### Next-stage target stack (native app)
+- UI: SwiftUI + AppKit
+- Sync core: Swift-native modules (migrate from Python)
+- Notes bridge: AppleScript/JXA invocation from Swift
+- State store: SQLite
+- Background scheduling: launchd
+
+## Migration Plan (MVP -> Native App)
+1. Create macOS app shell (settings, sync status, logs view)
+2. Port config/state model from Python to Swift
+3. Port sync pipeline (fetch/parse/render/write/state update)
+4. Reuse existing behavior contract (folder mapping, attachments, incremental sync)
+5. Add menu bar operation and launchd management from UI
+6. Add packaging/signing/notarization and GitHub Releases pipeline
+
+## Open Issues / Risks
+- Non-inline attachment extraction still needs stronger coverage
+- Some Apple Notes/JXA objects can be unstable; bridge needs defensive handling
+- Need robust migration strategy from CLI config/state to app-managed config/state
+- Need end-to-end app tests for permission prompts and background reliability
+
+## Next Concrete Tasks
+1. Scaffold Xcode project (`SwiftUI` app + basic settings window)
+2. Define app config schema (vault path, folder selection, schedule, logs)
+3. Implement Swift wrapper for existing Notes bridge calls
+4. Implement sync run dashboard (last run, added/updated/errors)
+5. Set up GitHub Actions for macOS app build artifacts
