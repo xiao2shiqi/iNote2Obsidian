@@ -10,74 +10,37 @@
 
 所以我决定自己实现，并以开源方式提供出来。
 
-## 项目目标
+## 项目目标（已更新）
 
-做一个稳定、低感知的同步工具，把 Apple 备忘录中的日记同步到 Obsidian 指定目录，包含：
-- 文字内容
-- 图片/附件
+开发一个 **macOS 原生桌面应用**，把 Apple Notes 稳定同步到 Obsidian，并提供可视化界面与可靠后台能力。
 
-## v1 范围
+## 产品方向
 
+- 形态：原生 macOS App（不是脚本产品）
 - 同步方向：**仅 Apple Notes -> Obsidian**
-- 仅支持一个配置文件夹
-- 删除策略为 tombstone（不自动删除 Obsidian 文件）
-- 优先保证在 macOS 上后台稳定同步
+- 优先级：可靠性优先，其次是交互体验
+- 分发方式：**通过 GitHub Releases 提供安装包**（不走 Mac App Store）
 
-## v1 技术栈
+## 下一阶段推荐技术栈
 
-- `Python 3.12`
-- `osascript`（JXA/AppleScript）
-- `SQLite`
-- `launchd`（LaunchAgent）
-- Markdown + 资源文件
+- UI：`SwiftUI` + `AppKit` 集成
+- 同步核心：Swift 原生模块
+- Notes 访问：`AppleScript/JXA` 桥接
+- 状态存储：`SQLite`
+- 后台调度：`launchd`
 
-## 安装
+## 当前状态
 
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
-```
+当前仓库已具备可运行的 CLI 同步 MVP（Python 实现），已验证核心能力：
+- 增量同步
+- 目录映射
+- Markdown + 附件输出
+- 日志与 SQLite 状态管理
 
-## 初始化配置
+这个 MVP 将作为后续迁移到原生 macOS App 架构的功能基线。
 
-```bash
-inote2obsidian init-config --output ./config.yaml
-```
+## 分发规划
 
-然后编辑 `config.yaml`，至少配置：
-- `apple_notes.folder_name`
-- `obsidian.vault_path`
-- `state.db_path`
-- `logging.file_path`
-
-## 常用命令
-
-```bash
-inote2obsidian doctor --config ./config.yaml
-inote2obsidian sync --config ./config.yaml
-inote2obsidian status --config ./config.yaml
-```
-
-## launchd（每 5 分钟）
-
-```bash
-scripts/install_launchd.sh \
-  "$PWD/.venv/bin/python" \
-  "$PWD/config.yaml" \
-  "$PWD/.inote2obsidian/stdout.log" \
-  "$PWD/.inote2obsidian/stderr.log" \
-  "$HOME/Library/LaunchAgents/com.inote2obsidian.sync.plist"
-```
-
-卸载：
-
-```bash
-scripts/uninstall_launchd.sh "$HOME/Library/LaunchAgents/com.inote2obsidian.sync.plist"
-```
-
-## 说明
-
-- 首次运行可能出现 macOS Automation 授权弹窗，需要允许访问 Notes。
-- v1 以可靠性优先，富文本可能降级为普通 Markdown。
-- Apple Notes 附件提取在不同环境下可能需要进一步调优。
+- 使用 GitHub Actions 构建 macOS 安装产物
+- 通过 GitHub Releases 发布版本
+- 在仓库中提供直接下载安装说明
