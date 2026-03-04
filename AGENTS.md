@@ -48,3 +48,9 @@ When updating `README.md`, sync equivalent changes to `README.zh-CN.md` in the s
 ## Context Handoff Rule
 
 When context utilization reaches a critical level (target 40% to 60%), summarize the current goal, approaches taken, completed steps, and remaining issues into a handoff file (usually `progress.md`), then start a clean new session and reload that file.
+
+## Continuous Iteration Method
+
+`progress.md` is the project continuity document and iteration log.
+In every iteration, continuously sync and update the project goal, methods used, and current progress in `progress.md`.
+Treat this as a standing methodology for the project lifecycle.
