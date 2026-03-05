@@ -24,6 +24,20 @@ final class SyncEngine {
         var errors = 0
         let notes: [SourceNote]
 
+        progress?(
+            SyncProgress(
+                stage: .fetching,
+                total: 0,
+                processed: 0,
+                pending: 0,
+                currentNote: nil,
+                eventType: nil,
+                outputFile: nil,
+                message: "Fetching notes from Apple Notes...",
+                queuePreview: []
+            )
+        )
+
         do {
             notes = try bridge.fetchNotes(excludeRecentlyDeleted: settings.excludeRecentlyDeleted)
         } catch let err as SyncError {

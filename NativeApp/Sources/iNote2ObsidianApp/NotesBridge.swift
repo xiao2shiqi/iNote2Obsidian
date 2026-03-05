@@ -77,7 +77,15 @@ function run(argv) {
         process.standardError = stderr
 
         try process.run()
-        process.waitUntilExit()
+        let timeout: TimeInterval = 120
+        let start = Date()
+        while process.isRunning {
+            Thread.sleep(forTimeInterval: 0.05)
+            if Date().timeIntervalSince(start) > timeout {
+                process.terminate()
+                throw SyncError.bridgeFailed("Timed out while reading Apple Notes")
+            }
+        }
 
         let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         if process.terminationStatus != 0 {

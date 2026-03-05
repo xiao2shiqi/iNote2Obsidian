@@ -69,6 +69,7 @@ struct SyncRunStats: Codable, Equatable {
 }
 
 enum SyncProgressStage {
+    case fetching
     case queueReady
     case noteProcessed
     case completed

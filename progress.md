@@ -91,6 +91,10 @@ A working CLI MVP exists and is used as the migration baseline.
   - waiting queue preview
   - sync rounds counter
   - rolling detailed log lines for runtime visibility
+- Addressed UX feedback:
+  - realtime panel now shows explicit \"Fetching notes\" stage before queue is available
+  - Notes bridge now has timeout guard to avoid indefinite hanging
+  - settings window activation behavior strengthened (`orderFrontRegardless` + app activate)
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)

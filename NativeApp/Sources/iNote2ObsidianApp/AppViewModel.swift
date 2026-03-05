@@ -273,8 +273,11 @@ final class AppViewModel: ObservableObject {
 
     func openSettingsWindow() {
         if let window = settingsWindow {
+            window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
+            window.makeMain()
             NSApp.activate(ignoringOtherApps: true)
+            NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
             return
         }
 
@@ -289,9 +292,13 @@ final class AppViewModel: ObservableObject {
         window.title = "iNote2Obsidian Settings"
         window.contentViewController = hosting
         window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace]
         window.center()
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
+        window.makeMain()
         NSApp.activate(ignoringOtherApps: true)
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
         self.settingsWindow = window
     }
 
@@ -319,8 +326,12 @@ final class AppViewModel: ObservableObject {
         pendingInCurrentRun = progress.pending
 
         switch progress.stage {
+        case .fetching:
+            statusMessage = progress.message ?? "Fetching notes..."
+            appendLog(progress.message ?? "Fetching notes...")
         case .queueReady:
             pendingQueuePreview = progress.queuePreview
+            statusMessage = "Queue ready: \(progress.total) notes"
             appendLog("Queue prepared: \(progress.total) notes")
         case .noteProcessed:
             if let file = progress.outputFile {
@@ -338,6 +349,7 @@ final class AppViewModel: ObservableObject {
                 appendLog("[\(progress.processed)/\(progress.total)] \(label): \(note)")
             }
         case .completed:
+            statusMessage = "Sync completed"
             appendLog("Run completed")
         }
     }
