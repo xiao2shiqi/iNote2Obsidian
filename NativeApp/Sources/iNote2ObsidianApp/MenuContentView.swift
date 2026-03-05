@@ -7,10 +7,10 @@ struct MenuContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Status")
+                Text("状态")
                     .font(.headline)
                 Spacer()
-                Label(viewModel.status.rawValue, systemImage: viewModel.statusIconName)
+                Label(viewModel.statusText, systemImage: viewModel.statusIconName)
                     .foregroundStyle(viewModel.statusColor)
             }
 
@@ -26,13 +26,19 @@ struct MenuContentView: View {
 
             Divider()
 
-            Button("Sync Now") {
-                viewModel.syncNow()
+            Button("打开主界面") {
+                viewModel.focusMainWindowFromMenuBar()
             }
 
-            Button("Settings") {
-                viewModel.openSettingsWindow()
+            Button("开始") {
+                viewModel.startSyncing()
             }
+            .disabled(!viewModel.canStart)
+
+            Button("结束") {
+                viewModel.stopSyncing()
+            }
+            .disabled(!viewModel.canStop)
 
             Button("Check for Updates") {
                 viewModel.checkForUpdates()

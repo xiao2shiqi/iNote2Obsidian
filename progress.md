@@ -78,6 +78,13 @@ A working CLI MVP exists and is used as the migration baseline.
 - Added smoke test script `scripts/native_app_smoke_test.sh` and verified:
   - app builds
   - app process launches and stays alive for 3 seconds
+- Interaction model upgraded:
+  - app opens settings window automatically on startup
+  - start/stop controls added with mutual disable logic
+  - traffic-light status model added (`red/green/yellow`)
+  - yellow state shows last sync error summary
+  - syncing wave animation added in settings window
+  - menu bar entry retained and can focus the main settings window
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)

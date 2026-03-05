@@ -1,5 +1,21 @@
 import Foundation
 
+enum SyncRunMode: String, Codable {
+    case stopped
+    case running
+}
+
+enum SyncHealth: String, Codable {
+    case ok
+    case warning
+}
+
+enum SyncLampState: String {
+    case red
+    case green
+    case yellow
+}
+
 enum SyncStatus: String, Codable {
     case idle
     case syncing
@@ -86,6 +102,7 @@ struct AppSettings: Codable, Equatable {
     var syncInterval: SyncInterval
     var excludeRecentlyDeleted: Bool
     var autoStartAtLogin: Bool
+    var lastRunMode: SyncRunMode
 
     static var `default`: AppSettings {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -94,7 +111,8 @@ struct AppSettings: Codable, Equatable {
             outputRootPath: defaultOutput,
             syncInterval: .fiveMinutes,
             excludeRecentlyDeleted: true,
-            autoStartAtLogin: true
+            autoStartAtLogin: true,
+            lastRunMode: .stopped
         )
     }
 }
