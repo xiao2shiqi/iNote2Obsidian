@@ -68,6 +68,31 @@ struct SyncRunStats: Codable, Equatable {
     var status: SyncStatus
 }
 
+enum SyncProgressStage {
+    case queueReady
+    case noteProcessed
+    case completed
+}
+
+enum SyncNoteEventType {
+    case added
+    case updated
+    case skipped
+    case failed
+}
+
+struct SyncProgress {
+    var stage: SyncProgressStage
+    var total: Int
+    var processed: Int
+    var pending: Int
+    var currentNote: String?
+    var eventType: SyncNoteEventType?
+    var outputFile: String?
+    var message: String?
+    var queuePreview: [String]
+}
+
 struct SourceAttachment {
     var mimeType: String
     var data: Data
@@ -103,6 +128,7 @@ struct AppSettings: Codable, Equatable {
     var excludeRecentlyDeleted: Bool
     var autoStartAtLogin: Bool
     var lastRunMode: SyncRunMode
+    var totalSyncRounds: Int
 
     static var `default`: AppSettings {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -112,7 +138,8 @@ struct AppSettings: Codable, Equatable {
             syncInterval: .fiveMinutes,
             excludeRecentlyDeleted: true,
             autoStartAtLogin: true,
-            lastRunMode: .stopped
+            lastRunMode: .stopped,
+            totalSyncRounds: 0
         )
     }
 }

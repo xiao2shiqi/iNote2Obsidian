@@ -10,7 +10,11 @@ final class SyncEngine {
         self.logger = logger
     }
 
-    func run(settings: AppSettings, stateStore: StateStore) throws -> SyncRunStats {
+    func run(
+        settings: AppSettings,
+        stateStore: StateStore,
+        progress: ((SyncProgress) -> Void)? = nil
+    ) throws -> SyncRunStats {
         let start = Date()
         logger.info("sync started")
         var added = 0
@@ -35,6 +39,22 @@ final class SyncEngine {
         try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
 
         let noteIDs = Set(notes.map(\.noteID))
+        let total = notes.count
+        var processed = 0
+
+        progress?(
+            SyncProgress(
+                stage: .queueReady,
+                total: total,
+                processed: 0,
+                pending: total,
+                currentNote: nil,
+                eventType: nil,
+                outputFile: nil,
+                message: "Queue ready",
+                queuePreview: notes.prefix(30).map { "\($0.folderPath)/\($0.title)" }
+            )
+        )
 
         for note in notes {
             do {
@@ -44,6 +64,20 @@ final class SyncEngine {
 
                 if let prev, prev.contentHash == contentHash, !prev.isDeleted {
                     skipped += 1
+                    processed += 1
+                    progress?(
+                        SyncProgress(
+                            stage: .noteProcessed,
+                            total: total,
+                            processed: processed,
+                            pending: max(total - processed, 0),
+                            currentNote: note.title,
+                            eventType: .skipped,
+                            outputFile: prev.markdownRelativePath,
+                            message: "Skipped unchanged note",
+                            queuePreview: []
+                        )
+                    )
                     continue
                 }
 
@@ -82,12 +116,54 @@ final class SyncEngine {
 
                 if prev == nil {
                     added += 1
+                    processed += 1
+                    progress?(
+                        SyncProgress(
+                            stage: .noteProcessed,
+                            total: total,
+                            processed: processed,
+                            pending: max(total - processed, 0),
+                            currentNote: note.title,
+                            eventType: .added,
+                            outputFile: relativePath,
+                            message: "Added note",
+                            queuePreview: []
+                        )
+                    )
                 } else {
                     updated += 1
+                    processed += 1
+                    progress?(
+                        SyncProgress(
+                            stage: .noteProcessed,
+                            total: total,
+                            processed: processed,
+                            pending: max(total - processed, 0),
+                            currentNote: note.title,
+                            eventType: .updated,
+                            outputFile: relativePath,
+                            message: "Updated note",
+                            queuePreview: []
+                        )
+                    )
                 }
             } catch {
                 errors += 1
                 logger.error("note failed: \(error.localizedDescription)")
+                processed += 1
+                progress?(
+                    SyncProgress(
+                        stage: .noteProcessed,
+                        total: total,
+                        processed: processed,
+                        pending: max(total - processed, 0),
+                        currentNote: note.title,
+                        eventType: .failed,
+                        outputFile: nil,
+                        message: "Failed note: \(error.localizedDescription)",
+                        queuePreview: []
+                    )
+                )
             }
         }
 
@@ -102,6 +178,19 @@ final class SyncEngine {
 
         let status: SyncStatus = errors == 0 ? .success : .failedRuntime
         logger.info("sync finished added=\(added) updated=\(updated) skipped=\(skipped) deleted=\(deleted) errors=\(errors)")
+        progress?(
+            SyncProgress(
+                stage: .completed,
+                total: total,
+                processed: processed,
+                pending: max(total - processed, 0),
+                currentNote: nil,
+                eventType: nil,
+                outputFile: nil,
+                message: "Run completed",
+                queuePreview: []
+            )
+        )
         return SyncRunStats(
             startedAt: start,
             endedAt: Date(),

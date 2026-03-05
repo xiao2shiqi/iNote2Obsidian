@@ -12,6 +12,13 @@ final class AppViewModel: ObservableObject {
     @Published var statusMessage: String = "Stopped"
     @Published var lastErrorSummary: String?
     @Published var wavePhase: CGFloat = 0
+    @Published var syncRoundsCompleted: Int = 0
+    @Published var totalInCurrentRun: Int = 0
+    @Published var processedInCurrentRun: Int = 0
+    @Published var pendingInCurrentRun: Int = 0
+    @Published var pendingQueuePreview: [String] = []
+    @Published var recentlySyncedFiles: [String] = []
+    @Published var logLines: [String] = []
 
     private let settingsStore: AppSettingsStore
     private let logger: AppLogger
@@ -29,6 +36,7 @@ final class AppViewModel: ObservableObject {
             self.settingsStore = store
             self.settings = loaded
             self.runMode = loaded.lastRunMode
+            self.syncRoundsCompleted = loaded.totalSyncRounds
 
             let stateDir = store.stateDirectory
             let loggerURL = stateDir.appendingPathComponent("sync.log")
@@ -91,6 +99,8 @@ final class AppViewModel: ObservableObject {
         guard status != .syncing else { return }
         status = .syncing
         statusMessage = "Syncing..."
+        resetRealtimeRunState()
+        appendLog("Sync started")
         startWave()
         let currentSettings = settings
         let bridge = self.bridge
@@ -100,13 +110,25 @@ final class AppViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             let engine = SyncEngine(bridge: bridge, logger: logger)
             do {
-                let run = try engine.run(settings: currentSettings, stateStore: stateStore)
+                let run = try engine.run(
+                    settings: currentSettings,
+                    stateStore: stateStore,
+                    progress: { progress in
+                        DispatchQueue.main.async {
+                            self.applyProgress(progress)
+                        }
+                    }
+                )
                 DispatchQueue.main.async {
                     self.lastRun = run
                     self.status = run.status
                     self.statusMessage = "Added \(run.added), Updated \(run.updated), Errors \(run.errors)"
                     self.syncHealth = .ok
                     self.lastErrorSummary = nil
+                    self.syncRoundsCompleted += 1
+                    self.settings.totalSyncRounds = self.syncRoundsCompleted
+                    self.saveSettings()
+                    self.appendLog("Sync finished: +\(run.added) ~\(run.updated) !\(run.errors)")
                     self.stopWave()
                 }
             } catch let err as SyncError {
@@ -117,11 +139,13 @@ final class AppViewModel: ObservableObject {
                         self.syncHealth = .warning
                         self.lastErrorSummary = "需要授予 Notes 自动化权限"
                         self.statusMessage = "Permission required: allow Notes automation in System Settings."
+                        self.appendLog("Permission error: Notes automation not granted")
                     default:
                         self.status = .failedRuntime
                         self.syncHealth = .warning
                         self.lastErrorSummary = "同步失败：\(err)"
                         self.statusMessage = "Sync failed: \(err)"
+                        self.appendLog("Sync failed: \(err)")
                     }
                     self.stopWave()
                 }
@@ -131,6 +155,7 @@ final class AppViewModel: ObservableObject {
                     self.syncHealth = .warning
                     self.lastErrorSummary = "同步失败：\(error.localizedDescription)"
                     self.statusMessage = "Sync failed"
+                    self.appendLog("Sync failed: \(error.localizedDescription)")
                     self.stopWave()
                 }
             }
@@ -279,4 +304,65 @@ final class AppViewModel: ObservableObject {
             self.openSettingsWindow()
         }
     }
+
+    private func resetRealtimeRunState() {
+        totalInCurrentRun = 0
+        processedInCurrentRun = 0
+        pendingInCurrentRun = 0
+        pendingQueuePreview = []
+        recentlySyncedFiles = []
+    }
+
+    private func applyProgress(_ progress: SyncProgress) {
+        totalInCurrentRun = progress.total
+        processedInCurrentRun = progress.processed
+        pendingInCurrentRun = progress.pending
+
+        switch progress.stage {
+        case .queueReady:
+            pendingQueuePreview = progress.queuePreview
+            appendLog("Queue prepared: \(progress.total) notes")
+        case .noteProcessed:
+            if let file = progress.outputFile {
+                prependRecentFile(file)
+            }
+            if let event = progress.eventType {
+                let label: String
+                switch event {
+                case .added: label = "added"
+                case .updated: label = "updated"
+                case .skipped: label = "skipped"
+                case .failed: label = "failed"
+                }
+                let note = progress.currentNote ?? "Unknown"
+                appendLog("[\(progress.processed)/\(progress.total)] \(label): \(note)")
+            }
+        case .completed:
+            appendLog("Run completed")
+        }
+    }
+
+    private func prependRecentFile(_ path: String) {
+        recentlySyncedFiles.insert(path, at: 0)
+        if recentlySyncedFiles.count > 50 {
+            recentlySyncedFiles.removeLast(recentlySyncedFiles.count - 50)
+        }
+    }
+
+    private func appendLog(_ line: String) {
+        let time = DateFormatter.logTimestamp.string(from: Date())
+        logLines.append("[\(time)] \(line)")
+        if logLines.count > 300 {
+            logLines.removeFirst(logLines.count - 300)
+        }
+    }
+}
+
+private extension DateFormatter {
+    static let logTimestamp: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
 }

@@ -85,6 +85,12 @@ A working CLI MVP exists and is used as the migration baseline.
   - yellow state shows last sync error summary
   - syncing wave animation added in settings window
   - menu bar entry retained and can focus the main settings window
+- Added realtime monitoring panel in settings window:
+  - total/processed/pending counters for current run
+  - recently synced files list
+  - waiting queue preview
+  - sync rounds counter
+  - rolling detailed log lines for runtime visibility
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)
