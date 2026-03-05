@@ -17,6 +17,7 @@ final class AppViewModel: ObservableObject {
     private let sparkle = SparkleUpdater()
     private let stateStore: StateStore
     private var spinTimer: Timer?
+    private var settingsWindow: NSWindow?
 
     init() {
         do {
@@ -130,6 +131,30 @@ final class AppViewModel: ObservableObject {
 
     func checkForUpdates() {
         sparkle.checkForUpdates()
+    }
+
+    func openSettingsWindow() {
+        if let window = settingsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let rootView = SettingsView(viewModel: self)
+        let hosting = NSHostingController(rootView: rootView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 320),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "iNote2Obsidian Settings"
+        window.contentViewController = hosting
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.settingsWindow = window
     }
 
     private func applyScheduling() {

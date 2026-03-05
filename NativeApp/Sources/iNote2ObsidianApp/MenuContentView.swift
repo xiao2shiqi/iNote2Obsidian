@@ -31,7 +31,7 @@ struct MenuContentView: View {
             }
 
             Button("Settings") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                viewModel.openSettingsWindow()
             }
 
             Button("Check for Updates") {
