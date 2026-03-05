@@ -2,7 +2,6 @@ import AppKit
 import SwiftUI
 
 struct MenuContentView: View {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var viewModel: AppViewModel
 
     var body: some View {
@@ -28,7 +27,6 @@ struct MenuContentView: View {
             Divider()
 
             Button("打开主界面") {
-                openWindow(id: "main")
                 viewModel.focusMainWindowFromMenuBar()
             }
 

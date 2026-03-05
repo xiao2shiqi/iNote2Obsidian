@@ -95,8 +95,8 @@ A working CLI MVP exists and is used as the migration baseline.
   - realtime panel now shows explicit "Fetching notes" stage before queue is available
   - Notes bridge now has timeout guard to avoid indefinite hanging
   - settings window activation behavior strengthened (`orderFrontRegardless` + app activate)
-  - app launch flow updated: `swift run iNote2ObsidianApp` opens main settings window directly
-  - menu bar "open main" now routes through window id and then forces focus activation
+  - app launch flow updated: main settings window is now explicitly created at startup
+  - menu bar "open main" now directly focuses or creates the same native window instance
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)

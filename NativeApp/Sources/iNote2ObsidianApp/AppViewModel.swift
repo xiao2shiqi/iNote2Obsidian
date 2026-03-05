@@ -27,6 +27,7 @@ final class AppViewModel: ObservableObject {
     private let sparkle = SparkleUpdater()
     private let stateStore: StateStore
     private var waveTimer: Timer?
+    private var settingsWindow: NSWindow?
 
     init() {
         do {
@@ -48,6 +49,7 @@ final class AppViewModel: ObservableObject {
                 statusMessage = "Stopped"
                 scheduler.stop()
             }
+            openSettingsWindowSoon()
         } catch {
             fatalError("Failed to initialize app state: \(error)")
         }
@@ -270,17 +272,44 @@ final class AppViewModel: ObservableObject {
     }
 
     func openSettingsWindow() {
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
-        if let window = NSApp.windows.first(where: { $0.title.contains("iNote2Obsidian Settings") }) {
+
+        if let window = settingsWindow {
             window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
             window.makeMain()
+            return
         }
+
+        let rootView = SettingsView(viewModel: self)
+        let hosting = NSHostingController(rootView: rootView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "iNote2Obsidian Settings"
+        window.contentViewController = hosting
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace]
+        window.center()
+        window.orderFrontRegardless()
+        window.makeKeyAndOrderFront(nil)
+        window.makeMain()
+        settingsWindow = window
     }
 
     func focusMainWindowFromMenuBar() {
         openSettingsWindow()
+    }
+
+    private func openSettingsWindowSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            self.openSettingsWindow()
+        }
     }
 
     private func resetRealtimeRunState() {
