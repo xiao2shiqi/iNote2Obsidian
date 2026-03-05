@@ -47,7 +47,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("iNote2Obsidian")
                     .font(AppTypography.hero)
-                Text("Apple Notes 到 Obsidian 的本地同步")
+                Text(viewModel.t(.appSubtitle))
                     .font(AppTypography.body)
                     .foregroundStyle(.secondary)
             }
@@ -57,7 +57,7 @@ struct SettingsView: View {
             VStack(alignment: .trailing, spacing: 8) {
                 statusPill
                 if let run = viewModel.lastRun {
-                    Text("上次：+\(run.added)  ~\(run.updated)  !\(run.errors)")
+                    Text("\(viewModel.t(.lastRunPrefix)): +\(run.added)  ~\(run.updated)  !\(run.errors)")
                         .font(AppTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -90,14 +90,14 @@ struct SettingsView: View {
 
     private var actionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("控制")
+            Text(viewModel.t(.controls))
                 .font(AppTypography.title)
 
             HStack(spacing: 10) {
                 Button {
                     viewModel.startSyncing()
                 } label: {
-                    Label("开始同步", systemImage: "play.fill")
+                    Label(viewModel.t(.startSync), systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -107,7 +107,7 @@ struct SettingsView: View {
                 Button {
                     viewModel.stopSyncing()
                 } label: {
-                    Label("停止同步", systemImage: "stop.fill")
+                    Label(viewModel.t(.stopSync), systemImage: "stop.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -132,7 +132,7 @@ struct SettingsView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
             VStack(alignment: .leading, spacing: 4) {
-                Text("最近错误")
+                Text(viewModel.t(.recentError))
                     .font(AppTypography.bodyStrong)
                     .foregroundStyle(.yellow)
                 Text(message)
@@ -151,18 +151,18 @@ struct SettingsView: View {
 
     private var realtimeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("实时面板")
+            Text(viewModel.t(.realtimePanel))
                 .font(AppTypography.title)
 
             HStack(spacing: 10) {
-                statCard(title: "轮次", value: "\(viewModel.syncRoundsCompleted)")
-                statCard(title: "总量", value: "\(viewModel.totalInCurrentRun)")
-                statCard(title: "已处理", value: "\(viewModel.processedInCurrentRun)")
-                statCard(title: "待处理", value: "\(viewModel.pendingInCurrentRun)")
+                statCard(title: viewModel.t(.rounds), value: "\(viewModel.syncRoundsCompleted)")
+                statCard(title: viewModel.t(.total), value: "\(viewModel.totalInCurrentRun)")
+                statCard(title: viewModel.t(.processed), value: "\(viewModel.processedInCurrentRun)")
+                statCard(title: viewModel.t(.pending), value: "\(viewModel.pendingInCurrentRun)")
             }
 
             HStack(alignment: .top, spacing: 10) {
-                listCard(title: "最近同步") {
+                listCard(title: viewModel.t(.recentlySynced)) {
                     ForEach(viewModel.recentlySyncedFiles.prefix(12), id: \.self) { file in
                         Text(file)
                             .font(AppTypography.mono)
@@ -170,27 +170,27 @@ struct SettingsView: View {
                             .textSelection(.enabled)
                     }
                     if viewModel.recentlySyncedFiles.isEmpty {
-                        Text("暂无文件")
+                        Text(viewModel.t(.noFilesYet))
                             .font(AppTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                listCard(title: "等待队列") {
+                listCard(title: viewModel.t(.waitingQueue)) {
                     ForEach(viewModel.pendingQueuePreview.prefix(12), id: \.self) { item in
                         Text(item)
                             .font(AppTypography.caption)
                             .lineLimit(1)
                     }
                     if viewModel.pendingQueuePreview.isEmpty {
-                        Text("暂无排队项")
+                        Text(viewModel.t(.noQueuedItems))
                             .font(AppTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
 
-            listCard(title: "日志") {
+            listCard(title: viewModel.t(.logs)) {
                 ForEach(viewModel.logLines.suffix(80), id: \.self) { line in
                     Text(line)
                         .font(AppTypography.mono)
@@ -198,7 +198,7 @@ struct SettingsView: View {
                         .textSelection(.enabled)
                 }
                 if viewModel.logLines.isEmpty {
-                    Text("暂无日志")
+                    Text(viewModel.t(.noLogsYet))
                         .font(AppTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -241,7 +241,7 @@ struct SettingsView: View {
 
     private var outputSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("输出目录")
+            Text(viewModel.t(.outputDirectory))
                 .font(AppTypography.title)
 
             HStack(spacing: 8) {
@@ -252,7 +252,7 @@ struct SettingsView: View {
 
                 Spacer(minLength: 8)
 
-                Button("选择目录") {
+                Button(viewModel.t(.chooseDirectory)) {
                     viewModel.chooseOutputDirectory()
                 }
                 .buttonStyle(.bordered)
@@ -266,16 +266,16 @@ struct SettingsView: View {
 
     private var syncOptionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("同步选项")
+            Text(viewModel.t(.syncOptions))
                 .font(AppTypography.title)
 
             HStack {
-                Text("间隔")
+                Text(viewModel.t(.interval))
                     .font(AppTypography.body)
                 Spacer()
                 Picker("Interval", selection: $viewModel.settings.syncInterval) {
                     ForEach(SyncInterval.allCases) { interval in
-                        Text(interval.displayName).tag(interval)
+                        Text(viewModel.localizedIntervalDisplayName(interval)).tag(interval)
                     }
                 }
                 .labelsHidden()
@@ -285,17 +285,34 @@ struct SettingsView: View {
                 }
             }
 
-            Toggle("排除 Recently Deleted", isOn: $viewModel.settings.excludeRecentlyDeleted)
+            Toggle(viewModel.t(.excludeRecentlyDeleted), isOn: $viewModel.settings.excludeRecentlyDeleted)
                 .font(AppTypography.body)
                 .onChange(of: viewModel.settings.excludeRecentlyDeleted) { _ in
                     viewModel.saveSettings()
                 }
 
-            Toggle("登录后自动启动", isOn: $viewModel.settings.autoStartAtLogin)
+            Toggle(viewModel.t(.autoStartAtLogin), isOn: $viewModel.settings.autoStartAtLogin)
                 .font(AppTypography.body)
                 .onChange(of: viewModel.settings.autoStartAtLogin) { _ in
                     viewModel.saveSettings()
                 }
+
+            HStack {
+                Text(viewModel.t(.language))
+                    .font(AppTypography.body)
+                Spacer()
+                Picker("Language", selection: $viewModel.settings.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 240)
+                .onChange(of: viewModel.settings.language) { _ in
+                    viewModel.saveSettings()
+                    viewModel.applyLanguageImmediately()
+                }
+            }
         }
         .padding(16)
         .glassCard(cornerRadius: 16)

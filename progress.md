@@ -139,3 +139,20 @@ A working CLI MVP exists and is used as the migration baseline.
 - Remaining:
   - Verify visual details on different macOS appearance/accessibility settings.
   - Add snapshot/UI tests for critical state combinations (idle/syncing/warning/failure).
+
+## Iteration Note (2026-03-05, Localization)
+- Goal:
+  - Add manual language switching with English default and Simplified Chinese option in NativeApp.
+- Approach:
+  - Introduce a centralized localizer with key-based translation mapping.
+  - Extend settings schema with a persisted language field and backward-compatible decoding.
+  - Keep sync logic unchanged and localize UI/status messaging only.
+- Completed:
+  - Added `AppLanguage` and `AppSettings.language` with legacy JSON fallback to `.english`.
+  - Added `AppLocalizer.swift` with `L10nKey` and English/Simplified Chinese dictionaries.
+  - Localized `SettingsView` and `MenuContentView`, including a new language picker in Sync Options.
+  - Localized status/runtime messages in `AppViewModel` and wired immediate in-app language refresh.
+  - Added new unit test file `AppLocalizationTests.swift` for legacy decode fallback and localization key coverage.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+- Remaining:
+  - Run unit tests via the project’s preferred Xcode test pipeline (CLI `swift test` in this environment lacks test framework module resolution for current setup).

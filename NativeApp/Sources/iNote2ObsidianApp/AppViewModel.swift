@@ -44,9 +44,10 @@ final class AppViewModel: ObservableObject {
             self.stateStore = try StateStore(dbURL: stateDir.appendingPathComponent("state.db"))
             if self.runMode == .running {
                 applyScheduling()
+                statusMessage = t(.statusRunning)
             } else {
                 status = .idle
-                statusMessage = "Stopped"
+                statusMessage = t(.messageStopped)
                 scheduler.stop()
             }
             openSettingsWindowSoon()
@@ -72,7 +73,7 @@ final class AppViewModel: ObservableObject {
         runMode = .stopped
         status = .idle
         syncHealth = .ok
-        statusMessage = "Stopped"
+        statusMessage = t(.messageStopped)
         stopWave()
         settings.lastRunMode = .stopped
         saveSettings()
@@ -98,7 +99,7 @@ final class AppViewModel: ObservableObject {
         guard runMode == .running else { return }
         guard status != .syncing else { return }
         status = .syncing
-        statusMessage = "Syncing..."
+        statusMessage = t(.messageSyncing)
         resetRealtimeRunState()
         appendLog("Sync started")
         startWave()
@@ -122,7 +123,7 @@ final class AppViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.lastRun = run
                     self.status = run.status
-                    self.statusMessage = "Added \(run.added), Updated \(run.updated), Errors \(run.errors)"
+                    self.statusMessage = self.format(.messageRunResult, "\(run.added)", "\(run.updated)", "\(run.errors)")
                     self.syncHealth = .ok
                     self.lastErrorSummary = nil
                     self.syncRoundsCompleted += 1
@@ -137,14 +138,14 @@ final class AppViewModel: ObservableObject {
                     case .permissionDenied:
                         self.status = .failedPermission
                         self.syncHealth = .warning
-                        self.lastErrorSummary = "需要授予 Notes 自动化权限"
-                        self.statusMessage = "Permission required: allow Notes automation in System Settings."
+                        self.lastErrorSummary = self.t(.messagePermissionRequired)
+                        self.statusMessage = self.t(.messagePermissionRequired)
                         self.appendLog("Permission error: Notes automation not granted")
                     default:
                         self.status = .failedRuntime
                         self.syncHealth = .warning
-                        self.lastErrorSummary = "同步失败：\(err)"
-                        self.statusMessage = "Sync failed: \(err)"
+                        self.lastErrorSummary = "\(self.t(.messageSyncFailedWithDetailPrefix))\(err)"
+                        self.statusMessage = "\(self.t(.messageSyncFailedWithDetailPrefix)) \(err)"
                         self.appendLog("Sync failed: \(err)")
                     }
                     self.stopWave()
@@ -153,8 +154,8 @@ final class AppViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.status = .failedRuntime
                     self.syncHealth = .warning
-                    self.lastErrorSummary = "同步失败：\(error.localizedDescription)"
-                    self.statusMessage = "Sync failed"
+                    self.lastErrorSummary = "\(self.t(.messageSyncFailedWithDetailPrefix))\(error.localizedDescription)"
+                    self.statusMessage = self.t(.messageSyncFailed)
                     self.appendLog("Sync failed: \(error.localizedDescription)")
                     self.stopWave()
                 }
@@ -169,7 +170,36 @@ final class AppViewModel: ObservableObject {
                 applyScheduling()
             }
         } catch {
-            statusMessage = "Failed to save settings"
+            statusMessage = t(.messageFailedToSaveSettings)
+        }
+    }
+
+    func applyLanguageImmediately() {
+        settingsWindow?.title = t(.settingsWindowTitle)
+        switch status {
+        case .idle:
+            statusMessage = runMode == .running ? t(.statusRunning) : t(.messageStopped)
+        case .syncing:
+            statusMessage = t(.messageSyncing)
+        case .success:
+            if let run = lastRun {
+                statusMessage = format(.messageRunResult, "\(run.added)", "\(run.updated)", "\(run.errors)")
+            } else {
+                statusMessage = t(.messageSyncCompleted)
+            }
+        case .failedPermission:
+            statusMessage = t(.messagePermissionRequired)
+            lastErrorSummary = t(.messagePermissionRequired)
+        case .failedRuntime:
+            if let existingError = lastErrorSummary, !existingError.isEmpty {
+                let detail = existingError
+                    .replacingOccurrences(of: "Sync failed: ", with: "")
+                    .replacingOccurrences(of: "同步失败：", with: "")
+                lastErrorSummary = "\(t(.messageSyncFailedWithDetailPrefix))\(detail)"
+            }
+            if statusMessage.contains(t(.messageSyncFailed)) || statusMessage.lowercased().contains("sync failed") {
+                statusMessage = t(.messageSyncFailed)
+            }
         }
     }
 
@@ -202,12 +232,12 @@ final class AppViewModel: ObservableObject {
     var statusText: String {
         switch lampState {
         case .red:
-            return "Stopped"
+            return t(.statusStopped)
         case .green:
-            if status == .syncing { return "Syncing" }
-            return "Running"
+            if status == .syncing { return t(.statusSyncing) }
+            return t(.statusRunning)
         case .yellow:
-            return "Warning"
+            return t(.statusWarning)
         }
     }
 
@@ -277,6 +307,7 @@ final class AppViewModel: ObservableObject {
         NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
 
         if let window = settingsWindow {
+            window.title = t(.settingsWindowTitle)
             window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
             window.makeMain()
@@ -291,7 +322,7 @@ final class AppViewModel: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        window.title = "iNote2Obsidian Settings"
+        window.title = t(.settingsWindowTitle)
         window.contentViewController = hosting
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
@@ -327,11 +358,11 @@ final class AppViewModel: ObservableObject {
 
         switch progress.stage {
         case .fetching:
-            statusMessage = progress.message ?? "Fetching notes..."
+            statusMessage = progress.message ?? t(.messageFetchingNotes)
             appendLog(progress.message ?? "Fetching notes...")
         case .queueReady:
             pendingQueuePreview = progress.queuePreview
-            statusMessage = "Queue ready: \(progress.total) notes"
+            statusMessage = "\(t(.messageQueueReady)) \(progress.total)"
             appendLog("Queue prepared: \(progress.total) notes")
         case .noteProcessed:
             if let file = progress.outputFile {
@@ -349,8 +380,37 @@ final class AppViewModel: ObservableObject {
                 appendLog("[\(progress.processed)/\(progress.total)] \(label): \(note)")
             }
         case .completed:
-            statusMessage = "Sync completed"
+            statusMessage = t(.messageSyncCompleted)
             appendLog("Run completed")
+        }
+    }
+
+    var localizer: AppLocalizer {
+        AppLocalizer(language: settings.language)
+    }
+
+    func t(_ key: L10nKey) -> String {
+        localizer.text(key)
+    }
+
+    func format(_ key: L10nKey, _ args: CVarArg...) -> String {
+        String(format: t(key), locale: Locale(identifier: "en_US_POSIX"), arguments: args)
+    }
+
+    func localizedIntervalDisplayName(_ interval: SyncInterval) -> String {
+        switch interval {
+        case .fiveMinutes:
+            return t(.intervalFiveMinutes)
+        case .fifteenMinutes:
+            return t(.intervalFifteenMinutes)
+        case .thirtyMinutes:
+            return t(.intervalThirtyMinutes)
+        case .sixtyMinutes:
+            return t(.intervalSixtyMinutes)
+        case .oneEightyMinutes:
+            return t(.intervalOneEightyMinutes)
+        case .off:
+            return t(.intervalOff)
         }
     }
 

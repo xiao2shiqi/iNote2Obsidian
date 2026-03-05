@@ -41,7 +41,7 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
 
             if let run = viewModel.lastRun {
-                Text("上次：+\(run.added) ~\(run.updated) -\(run.deleted) !\(run.errors)")
+                Text("\(viewModel.t(.lastRunPrefix)): +\(run.added) ~\(run.updated) -\(run.deleted) !\(run.errors)")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
@@ -55,7 +55,7 @@ struct MenuContentView: View {
             Button {
                 viewModel.focusMainWindowFromMenuBar()
             } label: {
-                Label("打开主界面", systemImage: "macwindow")
+                Label(viewModel.t(.menuOpenMainWindow), systemImage: "macwindow")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.bordered)
@@ -64,7 +64,7 @@ struct MenuContentView: View {
                 Button {
                     viewModel.startSyncing()
                 } label: {
-                    Label("开始", systemImage: "play.fill")
+                    Label(viewModel.t(.menuStart), systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -74,7 +74,7 @@ struct MenuContentView: View {
                 Button {
                     viewModel.stopSyncing()
                 } label: {
-                    Label("结束", systemImage: "stop.fill")
+                    Label(viewModel.t(.menuStop), systemImage: "stop.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -84,7 +84,7 @@ struct MenuContentView: View {
             Button {
                 viewModel.checkForUpdates()
             } label: {
-                Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
+                Label(viewModel.t(.menuCheckUpdates), systemImage: "arrow.triangle.2.circlepath")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.bordered)
@@ -93,7 +93,7 @@ struct MenuContentView: View {
 
     private var outputSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("输出路径")
+            Text(viewModel.t(.menuOutputPath))
                 .font(.system(size: 11, weight: .medium, design: .default))
                 .foregroundStyle(.secondary)
             Text(viewModel.settings.outputRootPath)
@@ -106,7 +106,7 @@ struct MenuContentView: View {
     }
 
     private var footerSection: some View {
-        Button("Quit") {
+        Button(viewModel.t(.menuQuit)) {
             NSApplication.shared.terminate(nil)
         }
         .buttonStyle(.plain)

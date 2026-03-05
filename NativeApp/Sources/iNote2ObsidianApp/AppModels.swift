@@ -34,17 +34,6 @@ enum SyncInterval: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .fiveMinutes: return "Every 5 minutes"
-        case .fifteenMinutes: return "Every 15 minutes"
-        case .thirtyMinutes: return "Every 30 minutes"
-        case .sixtyMinutes: return "Every 60 minutes"
-        case .oneEightyMinutes: return "Every 180 minutes"
-        case .off: return "Off"
-        }
-    }
-
     var seconds: TimeInterval? {
         switch self {
         case .fiveMinutes: return 300
@@ -53,6 +42,20 @@ enum SyncInterval: String, CaseIterable, Identifiable, Codable {
         case .sixtyMinutes: return 3600
         case .oneEightyMinutes: return 10800
         case .off: return nil
+        }
+    }
+}
+
+enum AppLanguage: String, CaseIterable, Identifiable, Codable {
+    case english = "en"
+    case simplifiedChinese = "zh-Hans"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .english: return "English"
+        case .simplifiedChinese: return "简体中文"
         }
     }
 }
@@ -128,8 +131,59 @@ struct AppSettings: Codable, Equatable {
     var syncInterval: SyncInterval
     var excludeRecentlyDeleted: Bool
     var autoStartAtLogin: Bool
+    var language: AppLanguage
     var lastRunMode: SyncRunMode
     var totalSyncRounds: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case outputRootPath
+        case syncInterval
+        case excludeRecentlyDeleted
+        case autoStartAtLogin
+        case language
+        case lastRunMode
+        case totalSyncRounds
+    }
+
+    init(
+        outputRootPath: String,
+        syncInterval: SyncInterval,
+        excludeRecentlyDeleted: Bool,
+        autoStartAtLogin: Bool,
+        language: AppLanguage,
+        lastRunMode: SyncRunMode,
+        totalSyncRounds: Int
+    ) {
+        self.outputRootPath = outputRootPath
+        self.syncInterval = syncInterval
+        self.excludeRecentlyDeleted = excludeRecentlyDeleted
+        self.autoStartAtLogin = autoStartAtLogin
+        self.language = language
+        self.lastRunMode = lastRunMode
+        self.totalSyncRounds = totalSyncRounds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        outputRootPath = try container.decode(String.self, forKey: .outputRootPath)
+        syncInterval = try container.decode(SyncInterval.self, forKey: .syncInterval)
+        excludeRecentlyDeleted = try container.decode(Bool.self, forKey: .excludeRecentlyDeleted)
+        autoStartAtLogin = try container.decode(Bool.self, forKey: .autoStartAtLogin)
+        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .english
+        lastRunMode = try container.decode(SyncRunMode.self, forKey: .lastRunMode)
+        totalSyncRounds = try container.decode(Int.self, forKey: .totalSyncRounds)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(outputRootPath, forKey: .outputRootPath)
+        try container.encode(syncInterval, forKey: .syncInterval)
+        try container.encode(excludeRecentlyDeleted, forKey: .excludeRecentlyDeleted)
+        try container.encode(autoStartAtLogin, forKey: .autoStartAtLogin)
+        try container.encode(language, forKey: .language)
+        try container.encode(lastRunMode, forKey: .lastRunMode)
+        try container.encode(totalSyncRounds, forKey: .totalSyncRounds)
+    }
 
     static var `default`: AppSettings {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -139,6 +193,7 @@ struct AppSettings: Codable, Equatable {
             syncInterval: .fiveMinutes,
             excludeRecentlyDeleted: true,
             autoStartAtLogin: true,
+            language: .english,
             lastRunMode: .stopped,
             totalSyncRounds: 0
         )
