@@ -28,6 +28,7 @@ final class AppViewModel: ObservableObject {
     private let stateStore: StateStore
     private var waveTimer: Timer?
     private var settingsWindow: NSWindow?
+    private var lastScannedHeartbeatCount: Int = -1
 
     init() {
         do {
@@ -142,6 +143,12 @@ final class AppViewModel: ObservableObject {
                         self.statusMessage = self.t(.messagePermissionRequired)
                         self.appendLog("Permission error: Notes automation not granted")
                         self.presentPermissionAlert()
+                    case .bridgeFailed(let detail) where detail.localizedCaseInsensitiveContains("heartbeat timeout"):
+                        self.status = .failedRuntime
+                        self.syncHealth = .warning
+                        self.lastErrorSummary = self.t(.messageBridgeHeartbeatTimeout)
+                        self.statusMessage = self.t(.messageBridgeHeartbeatTimeout)
+                        self.appendLog("Bridge timeout: \(detail)")
                     default:
                         self.status = .failedRuntime
                         self.syncHealth = .warning
@@ -350,6 +357,7 @@ final class AppViewModel: ObservableObject {
         pendingInCurrentRun = 0
         pendingQueuePreview = []
         recentlySyncedFiles = []
+        lastScannedHeartbeatCount = -1
     }
 
     private func applyProgress(_ progress: SyncProgress) {
@@ -359,8 +367,21 @@ final class AppViewModel: ObservableObject {
 
         switch progress.stage {
         case .fetching:
-            statusMessage = progress.message ?? t(.messageFetchingNotes)
-            appendLog(progress.message ?? "Fetching notes...")
+            if let message = progress.message, message.hasPrefix("SCANNED:") {
+                let countText = String(message.dropFirst("SCANNED:".count))
+                if let count = Int(countText) {
+                    statusMessage = format(.messageScannedNotes, "\(count)")
+                    if count != lastScannedHeartbeatCount {
+                        appendLog("Scanned \(count) notes...")
+                        lastScannedHeartbeatCount = count
+                    }
+                } else {
+                    statusMessage = t(.messageFetchingNotesStreaming)
+                }
+            } else {
+                statusMessage = progress.message ?? t(.messageFetchingNotesStreaming)
+                appendLog(progress.message ?? "Fetching notes (streaming)...")
+            }
         case .queueReady:
             pendingQueuePreview = progress.queuePreview
             statusMessage = "\(t(.messageQueueReady)) \(progress.total)"

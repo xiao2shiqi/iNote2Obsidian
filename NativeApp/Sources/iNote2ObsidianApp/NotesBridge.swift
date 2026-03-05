@@ -1,18 +1,47 @@
 import Foundation
 
+struct BridgeProgress {
+    let scannedCount: Int
+    let currentFolder: String?
+    let heartbeatAt: Date
+}
+
+struct BridgeSummary {
+    let totalNotes: Int
+}
+
 final class NotesBridge {
-    private static let script = #"""
+    private static let streamScript = #"""
 ObjC.import('Foundation');
+
+function emit(tag, payload) {
+  try {
+    console.log(tag + "\t" + JSON.stringify(payload));
+  } catch (e) {
+  }
+}
 
 function run(argv) {
   var excludeRecentlyDeleted = argv[0] === 'true';
   var app = Application('Notes');
   app.includeStandardAdditions = true;
 
-  var out = [];
+  var scanned = 0;
+  var lastHeartbeatAt = Date.now();
 
   function toISO(d) {
     try { return (new Date(d)).toISOString(); } catch (e) { return ''; }
+  }
+
+  function maybeHeartbeat(folderPath) {
+    var now = Date.now();
+    if ((scanned % 20) === 0 || (now - lastHeartbeatAt) >= 2000) {
+      emit('HEARTBEAT', {
+        scanned: scanned,
+        current_folder: folderPath
+      });
+      lastHeartbeatAt = now;
+    }
   }
 
   function walk(folder, parentPath) {
@@ -31,7 +60,8 @@ function run(argv) {
     for (var i = 0; i < notes.length; i++) {
       try {
         var note = notes[i];
-        out.push({
+        scanned += 1;
+        emit('NOTE', {
           note_id: String(note.id()),
           title: String(note.name() || ''),
           folder_path: currentPath,
@@ -40,6 +70,7 @@ function run(argv) {
           body_plain: String(note.plaintext() || ''),
           body_html: String(note.body() || '')
         });
+        maybeHeartbeat(currentPath);
       } catch (e) {
       }
     }
@@ -60,46 +91,208 @@ function run(argv) {
     }
   }
 
-  return JSON.stringify(out);
+  emit('DONE', { total: scanned });
 }
 """#
 
     private let decoder = JSONDecoder()
 
-    func fetchNotes(excludeRecentlyDeleted: Bool) throws -> [SourceNote] {
+    func streamNotes(
+        excludeRecentlyDeleted: Bool,
+        onNote: @escaping (SourceNote) -> Void,
+        onProgress: @escaping (BridgeProgress) -> Void
+    ) throws -> BridgeSummary {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", Self.script, excludeRecentlyDeleted ? "true" : "false"]
+        process.arguments = ["-l", "JavaScript", "-e", Self.streamScript, excludeRecentlyDeleted ? "true" : "false"]
 
         let stdout = Pipe()
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
 
+        let parser = NotesStreamParser(decoder: decoder, onNote: onNote, onProgress: onProgress)
+
+        stdout.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            parser.consumeStdoutData(data)
+        }
+
+        stderr.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            parser.consumeStderrData(data)
+        }
+
         try process.run()
-        let timeout: TimeInterval = 120
-        let start = Date()
+        let heartbeatTimeout: TimeInterval = 30
+
         while process.isRunning {
             Thread.sleep(forTimeInterval: 0.05)
-            if Date().timeIntervalSince(start) > timeout {
+            if let parseErr = parser.parseError {
                 process.terminate()
-                throw SyncError.bridgeFailed("Timed out while reading Apple Notes")
+                throw SyncError.bridgeFailed("Bridge parse error: \(parseErr)")
+            }
+            if parser.isHeartbeatTimedOut(timeout: heartbeatTimeout) {
+                process.terminate()
+                throw SyncError.bridgeFailed("Bridge heartbeat timeout while reading Apple Notes")
             }
         }
 
-        let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        stdout.fileHandleForReading.readabilityHandler = nil
+        stderr.fileHandleForReading.readabilityHandler = nil
+
+        let remainOut = stdout.fileHandleForReading.readDataToEndOfFile()
+        if !remainOut.isEmpty {
+            parser.consumeStdoutData(remainOut)
+        }
+        let remainErr = stderr.fileHandleForReading.readDataToEndOfFile()
+        if !remainErr.isEmpty {
+            parser.consumeStderrData(remainErr)
+        }
+
+        parser.flush()
+
+        if let parseErr = parser.parseError {
+            throw SyncError.bridgeFailed("Bridge parse error: \(parseErr)")
+        }
+
+        let stderrText = parser.stderrText
         if process.terminationStatus != 0 {
-            if err.localizedCaseInsensitiveContains("not authorized") || err.localizedCaseInsensitiveContains("-1743") {
-                throw SyncError.permissionDenied(err)
+            if stderrText.localizedCaseInsensitiveContains("not authorized") || stderrText.localizedCaseInsensitiveContains("-1743") {
+                throw SyncError.permissionDenied(stderrText)
             }
-            throw SyncError.bridgeFailed(err)
+            throw SyncError.bridgeFailed(stderrText.isEmpty ? "Apple Notes bridge failed" : stderrText)
         }
 
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        guard !data.isEmpty else { return [] }
-        let raws = try decoder.decode([RawNote].self, from: data)
-        return raws.compactMap { $0.toSourceNote() }
+        return BridgeSummary(totalNotes: parser.doneTotal ?? parser.scannedCount)
     }
+}
+
+private final class NotesStreamParser: @unchecked Sendable {
+    private let decoder: JSONDecoder
+    private let onNote: (SourceNote) -> Void
+    private let onProgress: (BridgeProgress) -> Void
+    private let queue = DispatchQueue(label: "inote.bridge.parser")
+
+    private var stdoutBuffer = ""
+    private var stderrBuffer = ""
+    private var _parseError: Error?
+    private var _lastHeartbeatAt = Date()
+    private var _scannedCount = 0
+    private var _doneTotal: Int?
+
+    init(decoder: JSONDecoder, onNote: @escaping (SourceNote) -> Void, onProgress: @escaping (BridgeProgress) -> Void) {
+        self.decoder = decoder
+        self.onNote = onNote
+        self.onProgress = onProgress
+    }
+
+    func consumeStdoutData(_ data: Data) {
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        queue.sync {
+            stdoutBuffer += text
+            while let range = stdoutBuffer.range(of: "\n") {
+                let line = String(stdoutBuffer[..<range.lowerBound]).trimmingCharacters(in: .newlines)
+                stdoutBuffer.removeSubrange(stdoutBuffer.startIndex...range.lowerBound)
+                processLine(line)
+            }
+        }
+    }
+
+    func consumeStderrData(_ data: Data) {
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        queue.sync {
+            stderrBuffer += text
+        }
+    }
+
+    func flush() {
+        queue.sync {
+            let tail = stdoutBuffer.trimmingCharacters(in: .newlines)
+            if !tail.isEmpty {
+                processLine(tail)
+            }
+            stdoutBuffer = ""
+        }
+    }
+
+    var parseError: Error? {
+        queue.sync { _parseError }
+    }
+
+    var scannedCount: Int {
+        queue.sync { _scannedCount }
+    }
+
+    var doneTotal: Int? {
+        queue.sync { _doneTotal }
+    }
+
+    var stderrText: String {
+        queue.sync { stderrBuffer }
+    }
+
+    func isHeartbeatTimedOut(timeout: TimeInterval) -> Bool {
+        queue.sync { Date().timeIntervalSince(_lastHeartbeatAt) > timeout }
+    }
+
+    private func processLine(_ line: String) {
+        guard !line.isEmpty else { return }
+
+        if line.hasPrefix("NOTE\t") {
+            let raw = String(line.dropFirst(5))
+            guard let data = raw.data(using: .utf8) else { return }
+            do {
+                let noteRaw = try decoder.decode(RawNote.self, from: data)
+                guard let note = noteRaw.toSourceNote() else { return }
+                _scannedCount += 1
+                _lastHeartbeatAt = Date()
+                onNote(note)
+                onProgress(BridgeProgress(scannedCount: _scannedCount, currentFolder: note.folderPath, heartbeatAt: _lastHeartbeatAt))
+            } catch {
+                _parseError = error
+            }
+            return
+        }
+
+        if line.hasPrefix("HEARTBEAT\t") {
+            let raw = String(line.dropFirst(10))
+            if let data = raw.data(using: .utf8), let payload = try? decoder.decode(HeartbeatPayload.self, from: data) {
+                if let scanned = payload.scanned {
+                    _scannedCount = max(_scannedCount, scanned)
+                }
+                _lastHeartbeatAt = Date()
+                onProgress(BridgeProgress(scannedCount: _scannedCount, currentFolder: payload.currentFolder, heartbeatAt: _lastHeartbeatAt))
+            }
+            return
+        }
+
+        if line.hasPrefix("DONE\t") {
+            let raw = String(line.dropFirst(5))
+            if let data = raw.data(using: .utf8), let payload = try? decoder.decode(DonePayload.self, from: data) {
+                _doneTotal = payload.total
+                if let total = payload.total {
+                    _scannedCount = max(_scannedCount, total)
+                }
+            }
+        }
+    }
+}
+
+private struct HeartbeatPayload: Decodable {
+    let scanned: Int?
+    let currentFolder: String?
+
+    enum CodingKeys: String, CodingKey {
+        case scanned
+        case currentFolder = "current_folder"
+    }
+}
+
+private struct DonePayload: Decodable {
+    let total: Int?
 }
 
 private struct RawNote: Decodable {

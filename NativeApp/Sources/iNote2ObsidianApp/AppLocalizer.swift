@@ -56,6 +56,9 @@ enum L10nKey: Hashable, CaseIterable {
     case messageSyncFailedWithDetailPrefix
     case messageFailedToSaveSettings
     case messageFetchingNotes
+    case messageFetchingNotesStreaming
+    case messageScannedNotes
+    case messageBridgeHeartbeatTimeout
     case messageQueueReady
     case messageSyncCompleted
     case messageRunResult
@@ -132,6 +135,9 @@ struct AppLocalizer {
             .messageSyncFailedWithDetailPrefix: "Sync failed:",
             .messageFailedToSaveSettings: "Failed to save settings",
             .messageFetchingNotes: "Fetching notes...",
+            .messageFetchingNotesStreaming: "Fetching notes from Apple Notes (streaming)...",
+            .messageScannedNotes: "Scanned %@ notes...",
+            .messageBridgeHeartbeatTimeout: "Sync timed out while reading Apple Notes. Please reopen Notes and try again.",
             .messageQueueReady: "Queue ready:",
             .messageSyncCompleted: "Sync completed",
             .messageRunResult: "Added %@, Updated %@, Errors %@",
@@ -196,6 +202,9 @@ struct AppLocalizer {
             .messageSyncFailedWithDetailPrefix: "同步失败：",
             .messageFailedToSaveSettings: "保存设置失败",
             .messageFetchingNotes: "正在读取笔记...",
+            .messageFetchingNotesStreaming: "正在流式读取 Apple Notes...",
+            .messageScannedNotes: "已扫描 %@ 条笔记...",
+            .messageBridgeHeartbeatTimeout: "读取 Apple Notes 超时，请先打开备忘录后重试。",
             .messageQueueReady: "队列已就绪：",
             .messageSyncCompleted: "同步完成",
             .messageRunResult: "新增 %@，更新 %@，错误 %@",

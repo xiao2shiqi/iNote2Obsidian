@@ -169,3 +169,21 @@ A working CLI MVP exists and is used as the migration baseline.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
 - Remaining:
   - Improve fetch-stage hang diagnostics (distinguish true permission errors vs long-running/blocked JXA fetch).
+
+## Iteration Note (2026-03-05, Streaming Sync + Exists-Skip)
+- Goal:
+  - Avoid fetch-stage stalls by moving to streaming note retrieval and apply the policy: if target already has the note, skip writing.
+- Approach:
+  - Replace bridge bulk JSON return with JSONL-style stream events (`NOTE/HEARTBEAT/DONE`) from a single `osascript` process.
+  - Build a local markdown index by `source_note_id` before sync starts.
+  - Process each note immediately on arrival, using `source_note_id` existence check for skip behavior.
+- Completed:
+  - Added streaming bridge API in `NotesBridge` with heartbeat timeout enforcement (30s without heartbeat fails).
+  - Added `ExistingNoteIndex` scanner to map `source_note_id -> markdown relative path` (duplicate IDs choose newer mtime).
+  - Refactored `SyncEngine` to stream-process notes and enforce `exists => skip` policy.
+  - Added UI progress integration for streaming scanned counts (`SCANNED:n`).
+  - Added localized messages for streaming fetch and heartbeat timeout handling.
+  - Added `ExistingNoteIndexTests.swift` test file for source ID extraction and duplicate selection rule.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+- Remaining:
+  - Wire a runnable SwiftPM/Xcode test target for NativeApp tests (current package setup reports no test target).

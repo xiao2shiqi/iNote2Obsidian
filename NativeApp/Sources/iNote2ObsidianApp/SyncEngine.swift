@@ -17,12 +17,16 @@ final class SyncEngine {
     ) throws -> SyncRunStats {
         let start = Date()
         logger.info("sync started")
+
         var added = 0
-        var updated = 0
+        let updated = 0
         var skipped = 0
         var deleted = 0
         var errors = 0
-        let notes: [SourceNote]
+        var scanned = 0
+        var processed = 0
+        var seenSourceIDs = Set<String>()
+        var queuePreview: [String] = []
 
         progress?(
             SyncProgress(
@@ -33,110 +37,108 @@ final class SyncEngine {
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,
-                message: "Fetching notes from Apple Notes...",
+                message: "Fetching notes from Apple Notes (streaming)...",
                 queuePreview: []
             )
         )
 
-        do {
-            notes = try bridge.fetchNotes(excludeRecentlyDeleted: settings.excludeRecentlyDeleted)
-        } catch let err as SyncError {
-            switch err {
-            case .permissionDenied:
-                throw err
-            default:
-                throw err
-            }
-        }
-
         let outputRoot = URL(fileURLWithPath: settings.outputRootPath, isDirectory: true)
         try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
+        let existingIndex = ExistingNoteIndex.build(outputRoot: outputRoot, logger: logger)
 
-        let noteIDs = Set(notes.map(\.noteID))
-        let total = notes.count
-        var processed = 0
+        let bridgeSummary = try bridge.streamNotes(
+            excludeRecentlyDeleted: settings.excludeRecentlyDeleted,
+            onNote: { [self] note in
+                scanned += 1
+                seenSourceIDs.insert(note.noteID)
 
-        progress?(
-            SyncProgress(
-                stage: .queueReady,
-                total: total,
-                processed: 0,
-                pending: total,
-                currentNote: nil,
-                eventType: nil,
-                outputFile: nil,
-                message: "Queue ready",
-                queuePreview: notes.prefix(30).map { "\($0.folderPath)/\($0.title)" }
-            )
-        )
-
-        for note in notes {
-            do {
-                let rendered = transformer.render(note: note, outputRoot: outputRoot, runDate: start)
-                let contentHash = hash(rendered.markdown)
-                let prev = try stateStore.getNoteState(noteID: note.noteID)
-
-                if let prev, prev.contentHash == contentHash, !prev.isDeleted {
-                    skipped += 1
-                    processed += 1
-                    progress?(
-                        SyncProgress(
-                            stage: .noteProcessed,
-                            total: total,
-                            processed: processed,
-                            pending: max(total - processed, 0),
-                            currentNote: note.title,
-                            eventType: .skipped,
-                            outputFile: prev.markdownRelativePath,
-                            message: "Skipped unchanged note",
-                            queuePreview: []
-                        )
-                    )
-                    continue
+                if queuePreview.count < 30 {
+                    queuePreview.append("\(note.folderPath)/\(note.title)")
                 }
 
-                let relativePath: String
-                if let prev {
-                    relativePath = prev.markdownRelativePath
-                } else {
-                    relativePath = try resolveUniqueMarkdownPath(
+                if let existingRelativePath = existingIndex.bySourceID[note.noteID] {
+                    do {
+                        try stateStore.upsertNoteState(
+                            noteID: note.noteID,
+                            folderPath: note.folderPath,
+                            contentHash: "exists-skip",
+                            markdownRelativePath: existingRelativePath,
+                            isDeleted: false
+                        )
+                        skipped += 1
+                        processed += 1
+                        progress?(
+                            SyncProgress(
+                                stage: .noteProcessed,
+                                total: max(scanned, processed),
+                                processed: processed,
+                                pending: 0,
+                                currentNote: note.title,
+                                eventType: .skipped,
+                                outputFile: existingRelativePath,
+                                message: "Skipped existing note",
+                                queuePreview: []
+                            )
+                        )
+                    } catch {
+                        errors += 1
+                        processed += 1
+                        self.logger.error("note failed while upserting skip state: \(error.localizedDescription)")
+                        progress?(
+                            SyncProgress(
+                                stage: .noteProcessed,
+                                total: max(scanned, processed),
+                                processed: processed,
+                                pending: 0,
+                                currentNote: note.title,
+                                eventType: .failed,
+                                outputFile: nil,
+                                message: "Failed note: \(error.localizedDescription)",
+                                queuePreview: []
+                            )
+                        )
+                    }
+                    return
+                }
+
+                do {
+                    let rendered = self.transformer.render(note: note, outputRoot: outputRoot, runDate: start)
+                    let relativePath = try self.resolveUniqueMarkdownPath(
                         baseFolder: rendered.folderPath,
                         preferredFilename: rendered.preferredMarkdownFilename,
                         outputRoot: outputRoot,
                         sourceNoteID: rendered.sourceNoteID
                     )
-                }
 
-                let markdownURL = outputRoot.appendingPathComponent(relativePath)
-                try FileManager.default.createDirectory(at: markdownURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                guard let markdownData = rendered.markdown.data(using: .utf8) else {
-                    throw SyncError.io("unable to encode markdown")
-                }
-                try markdownData.write(to: markdownURL, options: .atomic)
+                    let markdownURL = outputRoot.appendingPathComponent(relativePath)
+                    try FileManager.default.createDirectory(at: markdownURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    guard let markdownData = rendered.markdown.data(using: .utf8) else {
+                        throw SyncError.io("unable to encode markdown")
+                    }
+                    try markdownData.write(to: markdownURL, options: .atomic)
 
-                for attachment in rendered.attachments {
-                    let attachmentURL = outputRoot.appendingPathComponent(attachment.relativePath)
-                    try FileManager.default.createDirectory(at: attachmentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try attachment.data.write(to: attachmentURL, options: .atomic)
-                }
+                    for attachment in rendered.attachments {
+                        let attachmentURL = outputRoot.appendingPathComponent(attachment.relativePath)
+                        try FileManager.default.createDirectory(at: attachmentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try attachment.data.write(to: attachmentURL, options: .atomic)
+                    }
 
-                try stateStore.upsertNoteState(
-                    noteID: note.noteID,
-                    folderPath: rendered.folderPath,
-                    contentHash: contentHash,
-                    markdownRelativePath: relativePath,
-                    isDeleted: false
-                )
+                    try stateStore.upsertNoteState(
+                        noteID: note.noteID,
+                        folderPath: rendered.folderPath,
+                        contentHash: self.hash(rendered.markdown),
+                        markdownRelativePath: relativePath,
+                        isDeleted: false
+                    )
 
-                if prev == nil {
                     added += 1
                     processed += 1
                     progress?(
                         SyncProgress(
                             stage: .noteProcessed,
-                            total: total,
+                            total: max(scanned, processed),
                             processed: processed,
-                            pending: max(total - processed, 0),
+                            pending: 0,
                             currentNote: note.title,
                             eventType: .added,
                             outputFile: relativePath,
@@ -144,45 +146,59 @@ final class SyncEngine {
                             queuePreview: []
                         )
                     )
-                } else {
-                    updated += 1
+                } catch {
+                    errors += 1
                     processed += 1
+                    self.logger.error("note failed: \(error.localizedDescription)")
                     progress?(
                         SyncProgress(
                             stage: .noteProcessed,
-                            total: total,
+                            total: max(scanned, processed),
                             processed: processed,
-                            pending: max(total - processed, 0),
+                            pending: 0,
                             currentNote: note.title,
-                            eventType: .updated,
-                            outputFile: relativePath,
-                            message: "Updated note",
+                            eventType: .failed,
+                            outputFile: nil,
+                            message: "Failed note: \(error.localizedDescription)",
                             queuePreview: []
                         )
                     )
                 }
-            } catch {
-                errors += 1
-                logger.error("note failed: \(error.localizedDescription)")
-                processed += 1
+            },
+            onProgress: { bridgeProgress in
                 progress?(
                     SyncProgress(
-                        stage: .noteProcessed,
-                        total: total,
+                        stage: .fetching,
+                        total: max(scanned, processed),
                         processed: processed,
-                        pending: max(total - processed, 0),
-                        currentNote: note.title,
-                        eventType: .failed,
+                        pending: 0,
+                        currentNote: nil,
+                        eventType: nil,
                         outputFile: nil,
-                        message: "Failed note: \(error.localizedDescription)",
+                        message: "SCANNED:\(bridgeProgress.scannedCount)",
                         queuePreview: []
                     )
                 )
             }
-        }
+        )
+
+        let total = max(bridgeSummary.totalNotes, max(scanned, processed))
+        progress?(
+            SyncProgress(
+                stage: .queueReady,
+                total: total,
+                processed: processed,
+                pending: 0,
+                currentNote: nil,
+                eventType: nil,
+                outputFile: nil,
+                message: "Queue ready",
+                queuePreview: queuePreview
+            )
+        )
 
         let existing = try stateStore.existingNoteIDs()
-        for id in existing where !noteIDs.contains(id) {
+        for id in existing where !seenSourceIDs.contains(id) {
             deleted += 1
             try stateStore.markDeleted(noteID: id)
             if let st = try stateStore.getNoteState(noteID: id) {
@@ -197,7 +213,7 @@ final class SyncEngine {
                 stage: .completed,
                 total: total,
                 processed: processed,
-                pending: max(total - processed, 0),
+                pending: 0,
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,
@@ -205,6 +221,7 @@ final class SyncEngine {
                 queuePreview: []
             )
         )
+
         return SyncRunStats(
             startedAt: start,
             endedAt: Date(),
@@ -243,12 +260,7 @@ final class SyncEngine {
 
     private func existingSourceID(of url: URL) -> String? {
         guard let text = try? String(contentsOf: url) else { return nil }
-        for line in text.split(separator: "\n") {
-            if line.starts(with: "source_note_id:") {
-                return String(line.split(separator: ":", maxSplits: 1)[1]).trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\"", with: "")
-            }
-        }
-        return nil
+        return ExistingNoteIndex.extractSourceNoteID(fromMarkdown: text)
     }
 
     private func markDeletedInFile(outputRoot: URL, markdownRelativePath: String) {
