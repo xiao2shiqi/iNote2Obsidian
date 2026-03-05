@@ -59,6 +59,10 @@ enum L10nKey: Hashable, CaseIterable {
     case messageQueueReady
     case messageSyncCompleted
     case messageRunResult
+    case permissionAlertTitle
+    case permissionAlertBody
+    case permissionAlertPrimaryButton
+    case permissionAlertSecondaryButton
 }
 
 struct AppLocalizer {
@@ -130,7 +134,11 @@ struct AppLocalizer {
             .messageFetchingNotes: "Fetching notes...",
             .messageQueueReady: "Queue ready:",
             .messageSyncCompleted: "Sync completed",
-            .messageRunResult: "Added %@, Updated %@, Errors %@"
+            .messageRunResult: "Added %@, Updated %@, Errors %@",
+            .permissionAlertTitle: "Automation Permission Required",
+            .permissionAlertBody: "Please allow iNote2Obsidian to control Apple Notes in System Settings > Privacy & Security > Automation.",
+            .permissionAlertPrimaryButton: "Open Settings",
+            .permissionAlertSecondaryButton: "Later"
         ],
         .simplifiedChinese: [
             .appSubtitle: "Apple Notes 到 Obsidian 的本地同步",
@@ -190,7 +198,11 @@ struct AppLocalizer {
             .messageFetchingNotes: "正在读取笔记...",
             .messageQueueReady: "队列已就绪：",
             .messageSyncCompleted: "同步完成",
-            .messageRunResult: "新增 %@，更新 %@，错误 %@"
+            .messageRunResult: "新增 %@，更新 %@，错误 %@",
+            .permissionAlertTitle: "需要自动化权限",
+            .permissionAlertBody: "请在「系统设置 > 隐私与安全性 > 自动化」中允许 iNote2Obsidian 控制 Apple Notes。",
+            .permissionAlertPrimaryButton: "打开设置",
+            .permissionAlertSecondaryButton: "稍后"
         ]
     ]
 }

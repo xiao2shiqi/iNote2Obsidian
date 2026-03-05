@@ -141,6 +141,7 @@ final class AppViewModel: ObservableObject {
                         self.lastErrorSummary = self.t(.messagePermissionRequired)
                         self.statusMessage = self.t(.messagePermissionRequired)
                         self.appendLog("Permission error: Notes automation not granted")
+                        self.presentPermissionAlert()
                     default:
                         self.status = .failedRuntime
                         self.syncHealth = .warning
@@ -426,6 +427,21 @@ final class AppViewModel: ObservableObject {
         logLines.append("[\(time)] \(line)")
         if logLines.count > 300 {
             logLines.removeFirst(logLines.count - 300)
+        }
+    }
+
+    private func presentPermissionAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = t(.permissionAlertTitle)
+        alert.informativeText = t(.permissionAlertBody)
+        alert.addButton(withTitle: t(.permissionAlertPrimaryButton))
+        alert.addButton(withTitle: t(.permissionAlertSecondaryButton))
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 }

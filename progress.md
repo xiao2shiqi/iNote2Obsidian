@@ -156,3 +156,16 @@ A working CLI MVP exists and is used as the migration baseline.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
 - Remaining:
   - Run unit tests via the project’s preferred Xcode test pipeline (CLI `swift test` in this environment lacks test framework module resolution for current setup).
+
+## Iteration Note (2026-03-05, Permission UX)
+- Goal:
+  - Improve failure diagnostics for Apple Notes automation permission denial.
+- Approach:
+  - Keep sync logic unchanged and add a UI-level alert path on `permissionDenied`.
+- Completed:
+  - Added permission alert presentation in `AppViewModel` when `SyncError.permissionDenied` occurs.
+  - Added localized alert title/body/button strings in `AppLocalizer` (English + Simplified Chinese).
+  - Added deep-link opening to macOS Automation settings pane from alert action.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+- Remaining:
+  - Improve fetch-stage hang diagnostics (distinguish true permission errors vs long-running/blocked JXA fetch).
