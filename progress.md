@@ -187,3 +187,15 @@ A working CLI MVP exists and is used as the migration baseline.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
 - Remaining:
   - Wire a runnable SwiftPM/Xcode test target for NativeApp tests (current package setup reports no test target).
+
+## Iteration Note (2026-03-06, Streaming Parser Hotfix)
+- Goal:
+  - Fix the zero-note issue after streaming sync rollout.
+- Root Cause:
+  - In `osascript -l JavaScript`, `console.log` output is emitted to `stderr` instead of `stdout`.
+  - The streaming parser initially consumed events from stdout only, causing all NOTE/HEARTBEAT/DONE lines to be missed.
+- Completed:
+  - Updated `NotesBridge` parser to consume event lines from both stdout and stderr.
+  - Added independent stream buffers for stdout and stderr event parsing to avoid line corruption.
+  - Preserved non-event stderr lines as error diagnostics.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.

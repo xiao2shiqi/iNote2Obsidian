@@ -171,12 +171,18 @@ function run(argv) {
 }
 
 private final class NotesStreamParser: @unchecked Sendable {
+    private enum StreamSource {
+        case stdout
+        case stderr
+    }
+
     private let decoder: JSONDecoder
     private let onNote: (SourceNote) -> Void
     private let onProgress: (BridgeProgress) -> Void
     private let queue = DispatchQueue(label: "inote.bridge.parser")
 
     private var stdoutBuffer = ""
+    private var stderrEventBuffer = ""
     private var stderrBuffer = ""
     private var _parseError: Error?
     private var _lastHeartbeatAt = Date()
@@ -190,21 +196,34 @@ private final class NotesStreamParser: @unchecked Sendable {
     }
 
     func consumeStdoutData(_ data: Data) {
-        guard let text = String(data: data, encoding: .utf8) else { return }
-        queue.sync {
-            stdoutBuffer += text
-            while let range = stdoutBuffer.range(of: "\n") {
-                let line = String(stdoutBuffer[..<range.lowerBound]).trimmingCharacters(in: .newlines)
-                stdoutBuffer.removeSubrange(stdoutBuffer.startIndex...range.lowerBound)
-                processLine(line)
-            }
-        }
+        consumeEventData(data, source: .stdout)
     }
 
     func consumeStderrData(_ data: Data) {
+        consumeEventData(data, source: .stderr)
+    }
+
+    private func consumeEventData(_ data: Data, source: StreamSource) {
         guard let text = String(data: data, encoding: .utf8) else { return }
         queue.sync {
-            stderrBuffer += text
+            switch source {
+            case .stdout:
+                stdoutBuffer += text
+            case .stderr:
+                stderrEventBuffer += text
+            }
+
+            var currentBuffer = source == .stdout ? stdoutBuffer : stderrEventBuffer
+            while let range = currentBuffer.range(of: "\n") {
+                let line = String(currentBuffer[..<range.lowerBound]).trimmingCharacters(in: .newlines)
+                currentBuffer.removeSubrange(currentBuffer.startIndex...range.lowerBound)
+                processLine(line, source: source)
+            }
+            if source == .stdout {
+                stdoutBuffer = currentBuffer
+            } else {
+                stderrEventBuffer = currentBuffer
+            }
         }
     }
 
@@ -212,9 +231,15 @@ private final class NotesStreamParser: @unchecked Sendable {
         queue.sync {
             let tail = stdoutBuffer.trimmingCharacters(in: .newlines)
             if !tail.isEmpty {
-                processLine(tail)
+                processLine(tail, source: .stdout)
             }
             stdoutBuffer = ""
+
+            let stderrTail = stderrEventBuffer.trimmingCharacters(in: .newlines)
+            if !stderrTail.isEmpty {
+                processLine(stderrTail, source: .stderr)
+            }
+            stderrEventBuffer = ""
         }
     }
 
@@ -238,7 +263,7 @@ private final class NotesStreamParser: @unchecked Sendable {
         queue.sync { Date().timeIntervalSince(_lastHeartbeatAt) > timeout }
     }
 
-    private func processLine(_ line: String) {
+    private func processLine(_ line: String, source: StreamSource) {
         guard !line.isEmpty else { return }
 
         if line.hasPrefix("NOTE\t") {
@@ -277,6 +302,11 @@ private final class NotesStreamParser: @unchecked Sendable {
                     _scannedCount = max(_scannedCount, total)
                 }
             }
+            return
+        }
+
+        if source == .stderr {
+            stderrBuffer += line + "\n"
         }
     }
 }
