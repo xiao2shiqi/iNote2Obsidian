@@ -97,6 +97,13 @@ A working CLI MVP exists and is used as the migration baseline.
   - settings window activation behavior strengthened (`orderFrontRegardless` + app activate)
   - app launch flow updated: main settings window is now explicitly created at startup
   - menu bar "open main" now directly focuses or creates the same native window instance
+- macOS visual refresh iteration completed:
+  - Rebuilt `SettingsView` into a layered glass-card layout with stronger hierarchy and spacing
+  - Introduced unified typography tokens (SF-based scale for hero/title/body/caption/mono)
+  - Added semantic status pill + progress indicator for clearer runtime state visibility
+  - Reworked action controls, output path card, sync options, and realtime dashboard sections
+  - Reworked menu bar panel with matching visual language and better action grouping
+  - Preserved existing sync behavior and view model bindings (UI-only redesign)
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)
@@ -118,3 +125,17 @@ A working CLI MVP exists and is used as the migration baseline.
 3. Implement Swift wrapper for existing Notes bridge calls
 4. Implement sync run dashboard (last run, added/updated/errors)
 5. Set up GitHub Actions for macOS app build artifacts
+
+## Iteration Note (2026-03-05)
+- Goal:
+  - Improve current UI aesthetics and typography to align closer with a modern macOS desktop feel.
+- Approach:
+  - Keep all sync logic unchanged in `AppViewModel` and redesign only SwiftUI presentation layers.
+  - Use system materials, SF typography hierarchy, and semantic spacing for readability.
+- Completed:
+  - Updated `NativeApp/Sources/iNote2ObsidianApp/SettingsView.swift`
+  - Updated `NativeApp/Sources/iNote2ObsidianApp/MenuContentView.swift`
+  - Added a reusable glass-card style modifier and centralized font scale in settings view.
+- Remaining:
+  - Verify visual details on different macOS appearance/accessibility settings.
+  - Add snapshot/UI tests for critical state combinations (idle/syncing/warning/failure).
