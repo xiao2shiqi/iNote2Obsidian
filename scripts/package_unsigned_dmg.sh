@@ -52,6 +52,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+xattr -cr "$APP_BUNDLE"
+codesign --force --deep --sign - --timestamp=none "$APP_BUNDLE"
+
 ln -sfn /Applications "$STAGE_DIR/Applications"
 rm -f "$DMG_PATH"
 
