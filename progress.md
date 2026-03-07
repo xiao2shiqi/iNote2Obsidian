@@ -327,3 +327,12 @@ A working CLI MVP exists and is used as the migration baseline.
   - Match success requires both `source_note_id` and body `source_content_hash`.
   - `Recently Deleted` stays excluded.
   - Attachments are intentionally excluded from the hash in this fast version.
+
+## Iteration Note (2026-03-07, Near-Realtime Mirror Delete)
+- Goal:
+  - Move from soft-delete markers to a near-realtime mirror behavior for the managed Obsidian directory.
+- Completed:
+  - Reduced the default scheduler cadence to 1 second for fast polling.
+  - Added a native app `1 second` interval option and made it the default.
+  - Changed missing-source handling from markdown tombstoning to actual file deletion in the managed output tree.
+  - Added empty-folder cleanup after mirrored note deletion.

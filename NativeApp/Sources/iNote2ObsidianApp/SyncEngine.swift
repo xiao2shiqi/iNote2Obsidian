@@ -166,10 +166,10 @@ final class SyncEngine {
                 throw SyncError.cancelled
             }
             deleted += 1
-            try stateStore.markDeleted(noteID: id)
             if let st = try stateStore.getNoteState(noteID: id) {
-                markDeletedInFile(outputRoot: outputRoot, markdownRelativePath: st.markdownRelativePath)
+                deleteMirroredNote(outputRoot: outputRoot, markdownRelativePath: st.markdownRelativePath)
             }
+            try stateStore.markDeleted(noteID: id)
         }
 
         let status: SyncStatus = errors == 0 ? .success : .failedRuntime
@@ -231,12 +231,25 @@ final class SyncEngine {
         return ExistingNoteIndex.extractSourceNoteID(fromMarkdown: text)
     }
 
-    private func markDeletedInFile(outputRoot: URL, markdownRelativePath: String) {
+    private func deleteMirroredNote(outputRoot: URL, markdownRelativePath: String) {
         let url = outputRoot.appendingPathComponent(markdownRelativePath)
-        guard var text = try? String(contentsOf: url) else { return }
-        if text.contains("is_deleted_in_source: false") {
-            text = text.replacingOccurrences(of: "is_deleted_in_source: false", with: "is_deleted_in_source: true")
-            try? text.write(to: url, atomically: true, encoding: .utf8)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try? FileManager.default.removeItem(at: url)
+        cleanupEmptyParentDirectories(from: url.deletingLastPathComponent(), stopAt: outputRoot)
+    }
+
+    private func cleanupEmptyParentDirectories(from start: URL, stopAt root: URL) {
+        let fm = FileManager.default
+        var current = start.standardizedFileURL
+        let stop = root.standardizedFileURL
+
+        while current.path.hasPrefix(stop.path), current != stop {
+            let children = (try? fm.contentsOfDirectory(at: current, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+            if !children.isEmpty {
+                break
+            }
+            try? fm.removeItem(at: current)
+            current = current.deletingLastPathComponent()
         }
     }
 

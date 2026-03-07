@@ -25,6 +25,7 @@ enum SyncStatus: String, Codable {
 }
 
 enum SyncInterval: String, CaseIterable, Identifiable, Codable {
+    case oneSecond = "1s"
     case fiveSeconds = "5s"
     case fiveMinutes = "5m"
     case fifteenMinutes = "15m"
@@ -37,6 +38,7 @@ enum SyncInterval: String, CaseIterable, Identifiable, Codable {
 
     var seconds: TimeInterval? {
         switch self {
+        case .oneSecond: return 1
         case .fiveSeconds: return 5
         case .fiveMinutes: return 300
         case .fifteenMinutes: return 900
@@ -196,7 +198,7 @@ struct AppSettings: Codable, Equatable {
         let defaultOutput = home.appendingPathComponent("Documents/iNote").path
         return AppSettings(
             outputRootPath: defaultOutput,
-            syncInterval: .fiveSeconds,
+            syncInterval: .oneSecond,
             excludeRecentlyDeleted: true,
             autoStartAtLogin: true,
             language: .english,
