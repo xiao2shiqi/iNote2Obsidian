@@ -36,6 +36,7 @@ enum L10nKey: Hashable, CaseIterable {
     case autoStartAtLogin
     case language
 
+    case intervalFiveSeconds
     case intervalFiveMinutes
     case intervalFifteenMinutes
     case intervalThirtyMinutes
@@ -120,6 +121,7 @@ struct AppLocalizer {
             .autoStartAtLogin: "Auto Start At Login",
             .language: "Language",
 
+            .intervalFiveSeconds: "Every 5 seconds",
             .intervalFiveMinutes: "Every 5 minutes",
             .intervalFifteenMinutes: "Every 15 minutes",
             .intervalThirtyMinutes: "Every 30 minutes",
@@ -192,6 +194,7 @@ struct AppLocalizer {
             .autoStartAtLogin: "登录后自动启动",
             .language: "语言",
 
+            .intervalFiveSeconds: "每 5 秒",
             .intervalFiveMinutes: "每 5 分钟",
             .intervalFifteenMinutes: "每 15 分钟",
             .intervalThirtyMinutes: "每 30 分钟",

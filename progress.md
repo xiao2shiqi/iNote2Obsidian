@@ -311,3 +311,11 @@ A working CLI MVP exists and is used as the migration baseline.
     - Duplicate `source_note_id`: `0`
 - Remaining:
   - The fallback retry path for per-note bridge failures is still kept in place as a defense-in-depth mechanism, even though the primary missing-three issue is now resolved at the parser layer.
+
+## Iteration Note (2026-03-07, Default Sync Cadence Update)
+- Goal:
+  - Reduce the default wait time before newly added Apple Notes appear in Obsidian.
+- Completed:
+  - Changed the CLI `launchd` template default `StartInterval` from 300 seconds to 5 seconds.
+  - Added a `5 seconds` option to the native app sync interval selector.
+  - Changed the native app default sync interval from `5 minutes` to `5 seconds`.

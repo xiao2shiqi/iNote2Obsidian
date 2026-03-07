@@ -480,6 +480,8 @@ final class AppViewModel: ObservableObject {
 
     func localizedIntervalDisplayName(_ interval: SyncInterval) -> String {
         switch interval {
+        case .fiveSeconds:
+            return t(.intervalFiveSeconds)
         case .fiveMinutes:
             return t(.intervalFiveMinutes)
         case .fifteenMinutes:
