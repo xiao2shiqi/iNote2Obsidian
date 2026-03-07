@@ -16,6 +16,7 @@ final class AppViewModel: ObservableObject {
     @Published var totalInCurrentRun: Int = 0
     @Published var processedInCurrentRun: Int = 0
     @Published var pendingInCurrentRun: Int = 0
+    @Published var isPendingCountAvailable: Bool = false
     @Published var pendingQueuePreview: [String] = []
     @Published var recentlySyncedFiles: [String] = []
     @Published var logLines: [String] = []
@@ -280,6 +281,17 @@ final class AppViewModel: ObservableObject {
         status == .syncing && runMode == .running
     }
 
+    var pendingDisplayValue: String {
+        isPendingCountAvailable ? "\(pendingInCurrentRun)" : "--"
+    }
+
+    var realtimeDetailMessage: String {
+        if status == .syncing && !isPendingCountAvailable {
+            return t(.messageScanningRealtime)
+        }
+        return statusMessage
+    }
+
     private func applyScheduling() {
         scheduler.configure(interval: settings.syncInterval) { [weak self] in
             DispatchQueue.main.async {
@@ -355,6 +367,7 @@ final class AppViewModel: ObservableObject {
         totalInCurrentRun = 0
         processedInCurrentRun = 0
         pendingInCurrentRun = 0
+        isPendingCountAvailable = false
         pendingQueuePreview = []
         recentlySyncedFiles = []
         lastScannedHeartbeatCount = -1
@@ -367,6 +380,7 @@ final class AppViewModel: ObservableObject {
 
         switch progress.stage {
         case .fetching:
+            isPendingCountAvailable = false
             if let message = progress.message, message.hasPrefix("SCANNED:") {
                 let countText = String(message.dropFirst("SCANNED:".count))
                 if let count = Int(countText) {
@@ -383,10 +397,14 @@ final class AppViewModel: ObservableObject {
                 appendLog(progress.message ?? "Fetching notes (streaming)...")
             }
         case .queueReady:
+            isPendingCountAvailable = true
             pendingQueuePreview = progress.queuePreview
             statusMessage = "\(t(.messageQueueReady)) \(progress.total)"
             appendLog("Queue prepared: \(progress.total) notes")
         case .noteProcessed:
+            if progress.total > 0 {
+                isPendingCountAvailable = true
+            }
             if let file = progress.outputFile {
                 prependRecentFile(file)
             }
@@ -402,6 +420,7 @@ final class AppViewModel: ObservableObject {
                 appendLog("[\(progress.processed)/\(progress.total)] \(label): \(note)")
             }
         case .completed:
+            isPendingCountAvailable = true
             statusMessage = t(.messageSyncCompleted)
             appendLog("Run completed")
         }

@@ -156,20 +156,33 @@ struct SettingsView: View {
 
             HStack(spacing: 10) {
                 statCard(title: viewModel.t(.processed), value: "\(viewModel.processedInCurrentRun)")
-                statCard(title: viewModel.t(.pending), value: "\(viewModel.pendingInCurrentRun)")
+                statCard(
+                    title: viewModel.t(.pending),
+                    value: viewModel.pendingDisplayValue,
+                    detail: viewModel.isPendingCountAvailable ? nil : viewModel.t(.valueCalculating)
+                )
             }
+
+            Text(viewModel.realtimeDetailMessage)
+                .font(AppTypography.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(16)
         .glassCard(cornerRadius: 16)
     }
 
-    private func statCard(title: String, value: String) -> some View {
+    private func statCard(title: String, value: String, detail: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(AppTypography.caption)
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(size: 36, weight: .semibold, design: .rounded))
+            if let detail {
+                Text(detail)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)

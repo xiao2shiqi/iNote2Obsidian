@@ -249,3 +249,14 @@ A working CLI MVP exists and is used as the migration baseline.
 - Next Session Starting Point:
   - Treat the current export path and simplified UI as the stable baseline.
   - Begin the next planning round from the remaining product/architecture tradeoffs rather than from sync correctness debugging.
+
+## Iteration Note (2026-03-07, Realtime Pending-State Clarification)
+- Goal:
+  - Avoid misleading `Processed 0 / Pending 0` display while the app is still scanning Apple Notes and has not calculated the remaining count yet.
+- Approach:
+  - Keep the simplified two-card realtime panel, but distinguish the scan stage from the queue-ready stage.
+- Completed:
+  - Added explicit pending-state tracking in `AppViewModel`.
+  - Updated the pending card to show `--` plus a `Calculating...` hint until the queue size is known.
+  - Added a realtime detail message that explains when Apple Notes is still being scanned and the remaining count is not ready yet.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.

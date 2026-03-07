@@ -58,10 +58,12 @@ enum L10nKey: Hashable, CaseIterable {
     case messageFetchingNotes
     case messageFetchingNotesStreaming
     case messageScannedNotes
+    case messageScanningRealtime
     case messageBridgeHeartbeatTimeout
     case messageQueueReady
     case messageSyncCompleted
     case messageRunResult
+    case valueCalculating
     case permissionAlertTitle
     case permissionAlertBody
     case permissionAlertPrimaryButton
@@ -137,10 +139,12 @@ struct AppLocalizer {
             .messageFetchingNotes: "Fetching notes...",
             .messageFetchingNotesStreaming: "Fetching notes from Apple Notes (streaming)...",
             .messageScannedNotes: "Scanned %@ notes...",
+            .messageScanningRealtime: "Scanning Apple Notes. Remaining count is still being calculated.",
             .messageBridgeHeartbeatTimeout: "Sync timed out while reading Apple Notes. Please reopen Notes and try again.",
             .messageQueueReady: "Queue ready:",
             .messageSyncCompleted: "Sync completed",
             .messageRunResult: "Added %@, Updated %@, Errors %@",
+            .valueCalculating: "Calculating...",
             .permissionAlertTitle: "Automation Permission Required",
             .permissionAlertBody: "Please allow iNote2Obsidian to control Apple Notes in System Settings > Privacy & Security > Automation.",
             .permissionAlertPrimaryButton: "Open Settings",
@@ -204,10 +208,12 @@ struct AppLocalizer {
             .messageFetchingNotes: "正在读取笔记...",
             .messageFetchingNotesStreaming: "正在流式读取 Apple Notes...",
             .messageScannedNotes: "已扫描 %@ 条笔记...",
+            .messageScanningRealtime: "正在扫描 Apple Notes，剩余数量还在计算中。",
             .messageBridgeHeartbeatTimeout: "读取 Apple Notes 超时，请先打开备忘录后重试。",
             .messageQueueReady: "队列已就绪：",
             .messageSyncCompleted: "同步完成",
             .messageRunResult: "新增 %@，更新 %@，错误 %@",
+            .valueCalculating: "计算中...",
             .permissionAlertTitle: "需要自动化权限",
             .permissionAlertBody: "请在「系统设置 > 隐私与安全性 > 自动化」中允许 iNote2Obsidian 控制 Apple Notes。",
             .permissionAlertPrimaryButton: "打开设置",
