@@ -86,11 +86,7 @@ A working CLI MVP exists and is used as the migration baseline.
   - syncing wave animation added in settings window
   - menu bar entry retained and can focus the main settings window
 - Added realtime monitoring panel in settings window:
-  - total/processed/pending counters for current run
-  - recently synced files list
-  - waiting queue preview
-  - sync rounds counter
-  - rolling detailed log lines for runtime visibility
+  - initially included total/processed/pending counters, recent files, waiting queue, sync rounds, and runtime logs
 - Addressed UX feedback:
   - realtime panel now shows explicit "Fetching notes" stage before queue is available
   - Notes bridge now has timeout guard to avoid indefinite hanging
@@ -104,6 +100,21 @@ A working CLI MVP exists and is used as the migration baseline.
   - Reworked action controls, output path card, sync options, and realtime dashboard sections
   - Reworked menu bar panel with matching visual language and better action grouping
   - Preserved existing sync behavior and view model bindings (UI-only redesign)
+- Sync architecture updated again for Apple Notes stability:
+  - bridge now streams lightweight note headers first
+  - note body fetch is deferred and executed per missing note only
+  - target directory presence is determined by markdown `source_note_id`
+  - current workaround uses plain-text body export for targeted note content extraction
+- Realtime UI simplified again:
+  - settings screen realtime panel now shows only `processed` and `pending`
+  - removed recent files, waiting queue, and log blocks from the main settings surface
+- Verified local sync target for current validation:
+  - `/Users/phoenix/Library/Mobile Documents/iCloud~md~obsidian/Documents/life-diary/apple-Notes`
+  - Apple Notes count: 275
+  - Exported markdown count: 275
+  - Missing: 0
+  - Extra: 0
+  - Duplicate `source_note_id`: 0
 
 ## Migration Plan (MVP -> Native App)
 1. Create macOS app shell (settings, sync status, logs view)
@@ -199,3 +210,42 @@ A working CLI MVP exists and is used as the migration baseline.
   - Added independent stream buffers for stdout and stderr event parsing to avoid line corruption.
   - Preserved non-event stderr lines as error diagnostics.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+
+## Iteration Note (2026-03-07, Header-First Sync Stabilization)
+- Goal:
+  - Avoid full-run blockage when specific Apple Notes records hang during rich body retrieval.
+- Approach:
+  - Stream only note headers during the first pass.
+  - Fetch note detail lazily for notes that do not already exist in the target directory.
+  - Fall back to plain-text body export for the current stable path.
+- Completed:
+  - Added `SourceNoteHeader` to model the lightweight bridge payload.
+  - Refactored `NotesBridge` into `streamNoteHeaders(...)` plus targeted `fetchNoteDetails(...)`.
+  - Switched bridge time fields from fragile ISO strings to epoch milliseconds.
+  - Revalidated export into `/Users/phoenix/Library/Mobile Documents/iCloud~md~obsidian/Documents/life-diary/apple-Notes`.
+  - Compared Apple Notes IDs with exported markdown `source_note_id` values and confirmed `275 = 275`.
+  - Repaired one previously missing note (`ICNote/p730`) and backfilled its markdown + SQLite state entry.
+- Remaining:
+  - Restore attachment/rich-body export on top of the stabilized header-first flow without reintroducing bridge hangs.
+
+## Iteration Note (2026-03-07, Realtime UI Simplification)
+- Goal:
+  - Reduce settings-screen noise and keep only the progress numbers the user actually needs during sync.
+- Approach:
+  - Remove detailed runtime surfaces from the main window and keep only processed/pending counters.
+- Completed:
+  - Simplified `SettingsView` realtime panel to two cards: synced and pending.
+  - Removed rounds/total counters, recent files, waiting queue, and log list from the main settings panel.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass after the UI simplification.
+
+## Iteration Note (2026-03-07, Current Planning Handoff)
+- Current State:
+  - NativeApp currently uses a stabilized header-first sync path: stream note headers first, fetch details only for notes missing from the target directory, and skip existing notes by `source_note_id`.
+  - The verified local target is `/Users/phoenix/Library/Mobile Documents/iCloud~md~obsidian/Documents/life-diary/apple-Notes`.
+  - Latest manual verification confirmed Apple Notes count and exported markdown count are aligned at `275 = 275`, with no missing, extra, or duplicate `source_note_id` entries.
+  - The settings window realtime panel has been intentionally reduced to only two numbers: synced and pending.
+- Known Tradeoff:
+  - The current stable bridge path prioritizes reliability and uses a plain-text-oriented detail export path; richer body/attachment restoration still needs a safer follow-up design.
+- Next Session Starting Point:
+  - Treat the current export path and simplified UI as the stable baseline.
+  - Begin the next planning round from the remaining product/architecture tradeoffs rather than from sync correctness debugging.
