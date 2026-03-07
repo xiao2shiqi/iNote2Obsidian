@@ -36,6 +36,10 @@ struct MenuContentView: View {
                 Button("Sync Log") {
                     openWindow(id: "sync-log")
                 }
+                Spacer()
+                Button("Quit") {
+                    viewModel.quitApplication()
+                }
             }
 
             if !viewModel.logs.isEmpty {

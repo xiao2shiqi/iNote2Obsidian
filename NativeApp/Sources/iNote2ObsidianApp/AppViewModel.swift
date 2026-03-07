@@ -150,6 +150,13 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    func quitApplication() {
+        if runMode == .running {
+            stopSyncing()
+        }
+        NSApp.terminate(nil)
+    }
+
     private func startTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: settings.pollIntervalSeconds, repeats: true) { [weak self] _ in
