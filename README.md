@@ -2,62 +2,52 @@
 
 English | [中文](README.zh-CN.md)
 
-## Why This Project
+`iNote2Obsidian` is a native macOS menu bar app for one-way sync from Apple Notes to Obsidian.
 
-I built this project because I had a real need: continuous, automatic, and low-friction sync from Apple Notes to Obsidian.
+## Current Product Direction
 
-After evaluating existing options (official importers, manual export/import, Shortcuts automations, and script-based workflows), I found that most solutions are either one-time migration or semi-automatic, and none provides a mature out-of-the-box always-on sync experience.
+- Form factor: native macOS app built with `SwiftUI + AppKit`
+- Sync direction: `Apple Notes -> Obsidian`
+- Interaction model: low-intrusion menu bar utility with settings and sync log
+- Priority: reliability first, UX second
+- Distribution: GitHub Releases
 
-So I decided to build one myself and publish it as open source.
+## v1 Behavior
 
-## Product Goal (Updated)
+- Choose an Obsidian vault folder, then run continuous background sync
+- Mirror Apple Notes folder structure into the vault
+- Export text and supported inline images into Markdown
+- Name notes by stable creation timestamp: `yyyyMMdd-HHmmss`
+- Reuse the same Markdown file when a note is updated
+- Delete the mirrored Markdown and assets when the source note is deleted
+- Move mirrored files when Apple Notes folders are renamed or moved
+- Store note assets under a shared vault root folder: `attachments/`
+- Show sync activity in an in-app sync log
 
-Build a **native macOS desktop application** for Apple Notes -> Obsidian sync, with a visual UI and reliable background operation.
+## Repository Layout
 
-## Product Direction
+- [NativeApp](/Users/phoenix/Documents/workspace/iNote2Obsidian/NativeApp): native macOS app source
+- [progress.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/progress.md): product source of truth and iteration log
+- [AGENTS.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/AGENTS.md): collaboration rules
 
-- App form: native macOS app (not a shell script product)
-- Sync direction: **Apple Notes -> Obsidian only**
-- Priority: reliability first, then UX polish
-- Distribution: **GitHub Releases installer package** (not Mac App Store)
-
-## Recommended Tech Stack (Next Stage)
-
-- UI: `SwiftUI` + `AppKit` integration
-- Sync core: Swift-native modules
-- Notes access: `AppleScript/JXA` bridge
-- State store: `SQLite`
-- Scheduler/background: `launchd`
-
-## Current Status
-
-The repository currently includes a working CLI sync engine MVP (Python-based) that validates core sync behavior:
-- incremental sync
-- folder mapping
-- markdown + attachment output
-- logging + sqlite state
-
-This MVP is the functional base for migration into the native macOS app architecture.
-
-## Distribution Plan
-
-- Build signed macOS installer artifacts via GitHub Actions
-- Publish app packages through GitHub Releases
-- Provide direct download/install docs in this repository
-
-## Native App Prototype (Current)
-
-A native macOS app prototype has been added under `NativeApp/`.
-
-Build locally:
+## Build
 
 ```bash
 cd NativeApp
 swift build
 ```
 
-Run smoke test:
+## Current Implementation Notes
 
-```bash
-scripts/native_app_smoke_test.sh
-```
+- Sync is implemented as a menu bar app with 1-second polling
+- Apple Notes access uses `osascript` + JXA
+- State is stored in `SQLite`
+- Sync log is written locally and shown in the app UI
+- Image extraction currently supports inline HTML image sources that resolve to `data:` URLs or local `file://` URLs
+
+## Known Gaps
+
+- No signed release packaging yet
+- No login-item installation yet
+- Rich text conversion is intentionally reduced to plain text + images in v1
+- Command-line toolchain on this machine can build the app with `swift build`, but does not provide a working Swift test module

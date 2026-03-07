@@ -2,62 +2,52 @@
 
 [English](README.md) | 中文
 
-## 为什么做这个项目
+`iNote2Obsidian` 是一个原生 macOS 菜单栏应用，用于把 Apple Notes 单向同步到 Obsidian。
 
-我做这个项目的原因很直接：我有把 Apple 备忘录持续、自动、无感同步到 Obsidian 的真实需求。
+## 当前产品方向
 
-我调研并尝试过很多现有方案（官方导入、手动导出导入、快捷指令、脚本定时任务等），但它们大多是一次性迁移或半自动流程，缺少一个成熟、开箱即用、可持续运行的同步工具。
+- 产品形态：基于 `SwiftUI + AppKit` 的原生 macOS 应用
+- 同步方向：`Apple Notes -> Obsidian`
+- 交互方式：低侵入菜单栏小程序，带设置页和同步日志
+- 优先级：可靠性优先，其次是体验
+- 发布方式：GitHub Releases
 
-所以我决定自己实现，并以开源方式提供出来。
+## v1 行为
 
-## 项目目标（已更新）
+- 选择 Obsidian vault 目录后，持续在后台同步
+- 将 Apple Notes 的目录结构映射到 vault 中
+- 导出文本和已支持的内嵌图片为 Markdown
+- 笔记文件名使用稳定创建时间：`yyyyMMdd-HHmmss`
+- 同一条笔记更新时覆盖原有 Markdown 文件
+- Apple Notes 删除后，删除对应的 Markdown 和资源
+- Apple Notes 目录重命名或移动后，对应文件一起迁移
+- 所有资源统一存放在 vault 根目录下的 `attachments/`
+- 在应用内展示同步日志
 
-开发一个 **macOS 原生桌面应用**，把 Apple Notes 稳定同步到 Obsidian，并提供可视化界面与可靠后台能力。
+## 仓库结构
 
-## 产品方向
+- [NativeApp](/Users/phoenix/Documents/workspace/iNote2Obsidian/NativeApp)：原生 macOS 应用源码
+- [progress.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/progress.md)：产品目标与迭代记录的唯一依据
+- [AGENTS.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/AGENTS.md)：协作规则
 
-- 形态：原生 macOS App（不是脚本产品）
-- 同步方向：**仅 Apple Notes -> Obsidian**
-- 优先级：可靠性优先，其次是交互体验
-- 分发方式：**通过 GitHub Releases 提供安装包**（不走 Mac App Store）
-
-## 下一阶段推荐技术栈
-
-- UI：`SwiftUI` + `AppKit` 集成
-- 同步核心：Swift 原生模块
-- Notes 访问：`AppleScript/JXA` 桥接
-- 状态存储：`SQLite`
-- 后台调度：`launchd`
-
-## 当前状态
-
-当前仓库已具备可运行的 CLI 同步 MVP（Python 实现），已验证核心能力：
-- 增量同步
-- 目录映射
-- Markdown + 附件输出
-- 日志与 SQLite 状态管理
-
-这个 MVP 将作为后续迁移到原生 macOS App 架构的功能基线。
-
-## 分发规划
-
-- 使用 GitHub Actions 构建 macOS 安装产物
-- 通过 GitHub Releases 发布版本
-- 在仓库中提供直接下载安装说明
-
-## Native App 原型（当前）
-
-仓库已新增原生 macOS App 原型，目录为 `NativeApp/`。
-
-本地构建：
+## 构建
 
 ```bash
 cd NativeApp
 swift build
 ```
 
-运行冒烟测试：
+## 当前实现说明
 
-```bash
-scripts/native_app_smoke_test.sh
-```
+- 同步以菜单栏应用形式运行，当前采用 `1 秒轮询`
+- Apple Notes 访问方式为 `osascript + JXA`
+- 状态存储使用 `SQLite`
+- 同步日志会落本地文件，并在应用界面中展示
+- 图片提取当前支持 HTML 中可解析为 `data:` 或本地 `file://` 的内嵌图片来源
+
+## 当前缺口
+
+- 还没有签名后的发布安装包
+- 还没有登录启动集成
+- 富文本在 v1 中有意降级为纯文本 + 图片
+- 当前这台机器的命令行 Swift 工具链可以通过 `swift build` 构建，但没有可用的 Swift 测试模块

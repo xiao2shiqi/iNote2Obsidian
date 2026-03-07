@@ -1,36 +1,37 @@
 import Foundation
 
 final class AppSettingsStore {
+    let appSupportDirectory: URL
     private let settingsURL: URL
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
 
     init() throws {
-        let appSupport = try FileManager.default.url(
+        let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
-        let root = appSupport.appendingPathComponent("iNote2Obsidian", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        self.settingsURL = root.appendingPathComponent("settings.json")
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        appSupportDirectory = base.appendingPathComponent("iNote2Obsidian", isDirectory: true)
+        settingsURL = appSupportDirectory.appendingPathComponent("settings.json")
+        try FileManager.default.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
     }
 
     func load() -> AppSettings {
-        guard let data = try? Data(contentsOf: settingsURL) else {
+        guard
+            let data = try? Data(contentsOf: settingsURL),
+            let settings = try? JSONDecoder().decode(AppSettings.self, from: data)
+        else {
             return .default
         }
-        return (try? decoder.decode(AppSettings.self, from: data)) ?? .default
+        return settings
     }
 
     func save(_ settings: AppSettings) throws {
-        let data = try encoder.encode(settings)
+        let data = try JSONEncoder().encode(settings)
         try data.write(to: settingsURL, options: .atomic)
     }
 
     var stateDirectory: URL {
-        settingsURL.deletingLastPathComponent()
+        appSupportDirectory.appendingPathComponent("State", isDirectory: true)
     }
 }

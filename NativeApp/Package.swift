@@ -14,7 +14,8 @@ let package = Package(
             name: "iNote2ObsidianApp",
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("SwiftUI")
+                .linkedFramework("SwiftUI"),
+                .linkedLibrary("sqlite3")
             ]
         )
     ]

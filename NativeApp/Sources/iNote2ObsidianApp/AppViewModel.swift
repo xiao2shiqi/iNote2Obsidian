@@ -1,537 +1,176 @@
 import AppKit
 import Foundation
-import SwiftUI
 
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published var settings: AppSettings
     @Published var runMode: SyncRunMode
-    @Published var syncHealth: SyncHealth = .ok
-    @Published var status: SyncStatus = .idle
-    @Published var lastRun: SyncRunStats?
+    @Published var status: AppStatus = .idle
     @Published var statusMessage: String = "Stopped"
-    @Published var lastErrorSummary: String?
-    @Published var wavePhase: CGFloat = 0
-    @Published var syncRoundsCompleted: Int = 0
-    @Published var totalInCurrentRun: Int = 0
-    @Published var scannedInCurrentRun: Int = 0
-    @Published var matchedInCurrentRun: Int = 0
-    @Published var pendingInCurrentRun: Int = 0
-    @Published var isPendingCountAvailable: Bool = false
-    @Published var pendingQueuePreview: [String] = []
-    @Published var recentlySyncedFiles: [String] = []
-    @Published var logLines: [String] = []
+    @Published var lastRunSummary: SyncRunSummary?
+    @Published var logs: [String] = []
 
     private let settingsStore: AppSettingsStore
     private let logger: AppLogger
-    private let scheduler = Scheduler()
-    private let bridge = NotesBridge()
-    private let sparkle = SparkleUpdater()
     private let stateStore: StateStore
-    private var waveTimer: Timer?
-    private var settingsWindow: NSWindow?
-    private var lastScannedHeartbeatCount: Int = -1
-    private var currentCancellation: SyncCancellationController?
+    private let engine: SyncEngine
+    private let snapshotProvider: NotesSnapshotProvider
+    private var timer: Timer?
+    private var isSyncing = false
 
-    init() {
+    init(
+        settingsStore: AppSettingsStore? = nil,
+        snapshotProvider: NotesSnapshotProvider = AppleNotesBridge(),
+        engine: SyncEngine = SyncEngine()
+    ) {
         do {
-            let store = try AppSettingsStore()
-            let loaded = store.load()
+            let store = try settingsStore ?? AppSettingsStore()
+            let loadedSettings = store.load()
             self.settingsStore = store
-            self.settings = loaded
-            self.runMode = loaded.lastRunMode
-            self.syncRoundsCompleted = loaded.totalSyncRounds
-
-            let stateDir = store.stateDirectory
-            let loggerURL = stateDir.appendingPathComponent("sync.log")
-            self.logger = AppLogger(logURL: loggerURL)
-            self.stateStore = try StateStore(dbURL: stateDir.appendingPathComponent("state.db"))
-            if self.runMode == .running {
-                applyScheduling()
-                statusMessage = t(.statusRunning)
-            } else {
-                status = .idle
-                statusMessage = t(.messageStopped)
-                scheduler.stop()
+            self.settings = loadedSettings
+            self.runMode = loadedSettings.lastRunMode
+            let logger = AppLogger(logURL: store.stateDirectory.appendingPathComponent("sync.log"))
+            self.logger = logger
+            self.stateStore = try StateStore(dbURL: store.stateDirectory.appendingPathComponent("state.sqlite3"))
+            self.engine = engine
+            self.snapshotProvider = snapshotProvider
+            self.logs = logger.readRecentLines()
+            logger.onLog = { [weak self] entry in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.logs.append("[\(Self.timeOnlyFormatter.string(from: entry.timestamp))] \(entry.message)")
+                    self.logs = Array(self.logs.suffix(200))
+                }
             }
-            openSettingsWindowSoon()
+            if runMode == .running {
+                startTimer()
+                syncNow()
+            }
         } catch {
-            fatalError("Failed to initialize app state: \(error)")
+            fatalError("Failed to initialize app: \(error.localizedDescription)")
+        }
+    }
+
+    var statusBadge: String {
+        switch status {
+        case .idle: return "Stopped"
+        case .syncing: return "Syncing"
+        case .healthy: return "Healthy"
+        case .warning: return "Warning"
+        case .error: return "Error"
+        }
+    }
+
+    var statusIconName: String {
+        switch status {
+        case .idle: return "pause.circle"
+        case .syncing: return "arrow.triangle.2.circlepath.circle"
+        case .healthy: return "checkmark.circle"
+        case .warning: return "exclamationmark.triangle"
+        case .error: return "xmark.circle"
         }
     }
 
     func startSyncing() {
         guard runMode == .stopped else { return }
         runMode = .running
-        syncHealth = .ok
-        lastErrorSummary = nil
+        status = .healthy
+        statusMessage = "Watching Apple Notes"
         settings.lastRunMode = .running
         saveSettings()
-        applyScheduling()
+        startTimer()
         syncNow()
     }
 
     func stopSyncing() {
-        guard runMode == .running else { return }
-        scheduler.stop()
-        currentCancellation?.cancel()
-        currentCancellation = nil
+        timer?.invalidate()
+        timer = nil
         runMode = .stopped
         status = .idle
-        syncHealth = .ok
-        statusMessage = t(.messageStopped)
-        lastErrorSummary = nil
-        stopWave()
-        appendLog("Sync stopped")
+        statusMessage = "Stopped"
         settings.lastRunMode = .stopped
         saveSettings()
-    }
-
-    var canStart: Bool { runMode == .stopped }
-    var canStop: Bool { runMode == .running }
-    var isSyncingAnimationVisible: Bool { status == .syncing && runMode == .running }
-
-    var lampState: SyncLampState {
-        switch runMode {
-        case .stopped:
-            return .red
-        case .running:
-            switch syncHealth {
-            case .ok: return .green
-            case .warning: return .yellow
-            }
-        }
+        logger.info("sync stopped")
     }
 
     func syncNow() {
         guard runMode == .running else { return }
-        guard status != .syncing else { return }
+        guard !isSyncing else {
+            logger.info("scan skipped: previous run active")
+            return
+        }
+        isSyncing = true
         status = .syncing
-        statusMessage = t(.messageSyncing)
-        resetRealtimeRunState()
-        appendLog("Sync started")
-        startWave()
+        statusMessage = "Scanning Apple Notes"
+
         let currentSettings = settings
-        let bridge = self.bridge
-        let logger = self.logger
-        let stateStore = self.stateStore
-        let cancellation = SyncCancellationController()
-        currentCancellation = cancellation
+        let logger = logger
+        let stateStore = stateStore
+        let engine = engine
+        let snapshotProvider = snapshotProvider
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let engine = SyncEngine(bridge: bridge, logger: logger)
             do {
-                let run = try engine.run(
+                let summary = try engine.run(
                     settings: currentSettings,
+                    snapshotProvider: snapshotProvider,
                     stateStore: stateStore,
-                    cancellation: cancellation,
-                    progress: { progress in
-                        DispatchQueue.main.async {
-                            guard self.currentCancellation === cancellation, self.runMode == .running else { return }
-                            self.applyProgress(progress)
-                        }
-                    }
+                    logger: logger
                 )
                 DispatchQueue.main.async {
-                    guard self.currentCancellation === cancellation else { return }
-                    self.currentCancellation = nil
-                    guard self.runMode == .running else { return }
-                    self.lastRun = run
-                    self.status = run.status
-                    self.statusMessage = self.format(.messageRunResult, "\(run.added)", "\(run.updated)", "\(run.errors)")
-                    self.syncHealth = .ok
-                    self.lastErrorSummary = nil
-                    self.syncRoundsCompleted += 1
-                    self.settings.totalSyncRounds = self.syncRoundsCompleted
-                    self.saveSettings()
-                    self.appendLog("Sync finished: +\(run.added) ~\(run.updated) !\(run.errors)")
-                    self.stopWave()
-                }
-            } catch let err as SyncError {
-                DispatchQueue.main.async {
-                    guard self.currentCancellation === cancellation else { return }
-                    self.currentCancellation = nil
-                    if case .cancelled = err {
-                        self.status = .idle
-                        self.syncHealth = .ok
-                        self.lastErrorSummary = nil
-                        self.statusMessage = self.t(.messageStopped)
-                        self.stopWave()
-                        return
-                    }
-                    guard self.runMode == .running else { return }
-                    switch err {
-                    case .permissionDenied:
-                        self.status = .failedPermission
-                        self.syncHealth = .warning
-                        self.lastErrorSummary = self.t(.messagePermissionRequired)
-                        self.statusMessage = self.t(.messagePermissionRequired)
-                        self.appendLog("Permission error: Notes automation not granted")
-                        self.presentPermissionAlert()
-                    case .bridgeFailed(let detail) where detail.localizedCaseInsensitiveContains("heartbeat timeout"):
-                        self.status = .failedRuntime
-                        self.syncHealth = .warning
-                        self.lastErrorSummary = self.t(.messageBridgeHeartbeatTimeout)
-                        self.statusMessage = self.t(.messageBridgeHeartbeatTimeout)
-                        self.appendLog("Bridge timeout: \(detail)")
-                    case .cancelled:
-                        break
-                    default:
-                        self.status = .failedRuntime
-                        self.syncHealth = .warning
-                        self.lastErrorSummary = "\(self.t(.messageSyncFailedWithDetailPrefix))\(err)"
-                        self.statusMessage = "\(self.t(.messageSyncFailedWithDetailPrefix)) \(err)"
-                        self.appendLog("Sync failed: \(err)")
-                    }
-                    self.stopWave()
+                    self.lastRunSummary = summary
+                    self.status = summary.errorCount == 0 ? .healthy : .warning
+                    self.statusMessage = "Scanned \(summary.scannedCount), +\(summary.createdCount) ~\(summary.updatedCount) →\(summary.movedCount) -\(summary.deletedCount)"
+                    self.isSyncing = false
                 }
             } catch {
                 DispatchQueue.main.async {
-                    guard self.currentCancellation === cancellation else { return }
-                    self.currentCancellation = nil
-                    guard self.runMode == .running else { return }
-                    self.status = .failedRuntime
-                    self.syncHealth = .warning
-                    self.lastErrorSummary = "\(self.t(.messageSyncFailedWithDetailPrefix))\(error.localizedDescription)"
-                    self.statusMessage = self.t(.messageSyncFailed)
-                    self.appendLog("Sync failed: \(error.localizedDescription)")
-                    self.stopWave()
+                    if case .permissionDenied = error as? SyncError {
+                        self.status = .warning
+                    } else {
+                        self.status = .error
+                    }
+                    self.statusMessage = error.localizedDescription
+                    self.logger.error(error.localizedDescription)
+                    self.isSyncing = false
                 }
             }
         }
     }
 
-    func saveSettings() {
-        do {
-            try settingsStore.save(settings)
-            if runMode == .running {
-                applyScheduling()
-            }
-        } catch {
-            statusMessage = t(.messageFailedToSaveSettings)
-        }
-    }
-
-    func applyLanguageImmediately() {
-        settingsWindow?.title = t(.settingsWindowTitle)
-        switch status {
-        case .idle:
-            statusMessage = runMode == .running ? t(.statusRunning) : t(.messageStopped)
-        case .syncing:
-            statusMessage = t(.messageSyncing)
-        case .success:
-            if let run = lastRun {
-                statusMessage = format(.messageRunResult, "\(run.added)", "\(run.updated)", "\(run.errors)")
-            } else {
-                statusMessage = t(.messageSyncCompleted)
-            }
-        case .failedPermission:
-            statusMessage = t(.messagePermissionRequired)
-            lastErrorSummary = t(.messagePermissionRequired)
-        case .failedRuntime:
-            if let existingError = lastErrorSummary, !existingError.isEmpty {
-                let detail = existingError
-                    .replacingOccurrences(of: "Sync failed: ", with: "")
-                    .replacingOccurrences(of: "同步失败：", with: "")
-                lastErrorSummary = "\(t(.messageSyncFailedWithDetailPrefix))\(detail)"
-            }
-            if statusMessage.contains(t(.messageSyncFailed)) || statusMessage.lowercased().contains("sync failed") {
-                statusMessage = t(.messageSyncFailed)
-            }
-        }
-    }
-
-    func chooseOutputDirectory() {
+    func chooseVaultPath() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Select"
+        panel.prompt = "Select Vault"
         if panel.runModal() == .OK, let url = panel.urls.first {
-            settings.outputRootPath = url.path
+            settings.vaultPath = url.path
             saveSettings()
         }
     }
 
-    var statusIconName: String {
-        if status == .syncing && runMode == .running {
-            return "arrow.triangle.2.circlepath"
-        }
-        switch lampState {
-        case .red:
-            return "circle.fill"
-        case .green:
-            return "checkmark.circle.fill"
-        case .yellow:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-
-    var statusText: String {
-        switch lampState {
-        case .red:
-            return t(.statusStopped)
-        case .green:
-            if status == .syncing { return t(.statusSyncing) }
-            return t(.statusRunning)
-        case .yellow:
-            return t(.statusWarning)
-        }
-    }
-
-    var lampColor: Color {
-        switch lampState {
-        case .red:
-            return .red
-        case .green:
-            return .green
-        case .yellow:
-            return .yellow
-        }
-    }
-
-    var statusColor: Color {
-        if status == .syncing && runMode == .running {
-            return .blue
-        }
-        return lampColor
-    }
-
-    var statusBadge: String {
-        switch lampState {
-        case .yellow:
-            return "!"
-        default:
-            return ""
-        }
-    }
-
-    var shouldPulseMenuIcon: Bool {
-        status == .syncing && runMode == .running
-    }
-
-    var appleNotesDisplayValue: String { "\(totalInCurrentRun)" }
-
-    var matchedDisplayValue: String { "\(matchedInCurrentRun)" }
-
-    var pendingDisplayValue: String { "\(pendingInCurrentRun)" }
-
-    var managedOutputRootPath: String {
-        settings.managedOutputRootPath
-    }
-
-    var realtimeDetailMessage: String {
-        if status == .syncing && !isPendingCountAvailable {
-            return t(.messageScanningRealtime)
-        }
-        return statusMessage
-    }
-
-    private func applyScheduling() {
-        scheduler.configure(interval: settings.syncInterval) { [weak self] in
-            DispatchQueue.main.async {
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: settings.pollIntervalSeconds, repeats: true) { [weak self] _ in
+            Task { @MainActor in
                 self?.syncNow()
             }
         }
     }
 
-    private func startWave() {
-        waveTimer?.invalidate()
-        waveTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.wavePhase += 0.18
-                if self.wavePhase > .pi * 2 { self.wavePhase = 0 }
-            }
+    private func saveSettings() {
+        do {
+            try settingsStore.save(settings)
+        } catch {
+            logger.error("failed to save settings: \(error.localizedDescription)")
         }
     }
 
-    private func stopWave() {
-        waveTimer?.invalidate()
-        waveTimer = nil
-        wavePhase = 0
-    }
-
-    func checkForUpdates() {
-        sparkle.checkForUpdates()
-    }
-
-    func openSettingsWindow() {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
-
-        if let window = settingsWindow {
-            window.title = t(.settingsWindowTitle)
-            window.orderFrontRegardless()
-            window.makeKeyAndOrderFront(nil)
-            window.makeMain()
-            return
-        }
-
-        let rootView = SettingsView(viewModel: self)
-        let hosting = NSHostingController(rootView: rootView)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = t(.settingsWindowTitle)
-        window.contentViewController = hosting
-        window.isReleasedWhenClosed = false
-        window.collectionBehavior = [.moveToActiveSpace]
-        window.center()
-        window.orderFrontRegardless()
-        window.makeKeyAndOrderFront(nil)
-        window.makeMain()
-        settingsWindow = window
-    }
-
-    func focusMainWindowFromMenuBar() {
-        openSettingsWindow()
-    }
-
-    private func openSettingsWindowSoon() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            self.openSettingsWindow()
-        }
-    }
-
-    private func resetRealtimeRunState() {
-        totalInCurrentRun = 0
-        scannedInCurrentRun = 0
-        matchedInCurrentRun = 0
-        pendingInCurrentRun = 0
-        isPendingCountAvailable = false
-        pendingQueuePreview = []
-        recentlySyncedFiles = []
-        lastScannedHeartbeatCount = -1
-    }
-
-    private func applyProgress(_ progress: SyncProgress) {
-        totalInCurrentRun = progress.total
-        scannedInCurrentRun = progress.scanned
-        matchedInCurrentRun = progress.matched
-        pendingInCurrentRun = progress.pending
-        isPendingCountAvailable = progress.totalKnown
-        if !progress.totalKnown {
-            totalInCurrentRun = progress.scanned
-        }
-
-        switch progress.stage {
-        case .fetching:
-            if let message = progress.message, message.hasPrefix("SCANNED:") {
-                let countText = String(message.dropFirst("SCANNED:".count))
-                if let count = Int(countText) {
-                    statusMessage = format(.messageScannedNotes, "\(count)")
-                    if count != lastScannedHeartbeatCount {
-                        appendLog("Scanned \(count) notes...")
-                        lastScannedHeartbeatCount = count
-                    }
-                } else {
-                    statusMessage = t(.messageFetchingNotesStreaming)
-                }
-            } else {
-                statusMessage = progress.message ?? t(.messageFetchingNotesStreaming)
-                appendLog(progress.message ?? "Fetching notes (streaming)...")
-            }
-        case .queueReady:
-            pendingQueuePreview = progress.queuePreview
-            statusMessage = "\(t(.messageQueueReady)) \(progress.pending)"
-            appendLog("Queue prepared: \(progress.pending) notes pending sync")
-        case .noteProcessed:
-            if let file = progress.outputFile {
-                prependRecentFile(file)
-            }
-            if let event = progress.eventType {
-                let label: String
-                switch event {
-                case .added: label = "added"
-                case .updated: label = "updated"
-                case .skipped: label = "skipped"
-                case .failed: label = "failed"
-                }
-                let note = progress.currentNote ?? "Unknown"
-                let totalLabel = progress.totalKnown ? "\(progress.total)" : "?"
-                let progressLabel = progress.totalKnown ? "\(progress.matched)/\(totalLabel)" : "scan \(progress.scanned)"
-                appendLog("[\(progressLabel)] \(label): \(note)")
-            }
-        case .completed:
-            statusMessage = t(.messageSyncCompleted)
-            appendLog("Run completed")
-        }
-    }
-
-    var localizer: AppLocalizer {
-        AppLocalizer(language: settings.language)
-    }
-
-    func t(_ key: L10nKey) -> String {
-        localizer.text(key)
-    }
-
-    func format(_ key: L10nKey, _ args: CVarArg...) -> String {
-        String(format: t(key), locale: Locale(identifier: "en_US_POSIX"), arguments: args)
-    }
-
-    func localizedIntervalDisplayName(_ interval: SyncInterval) -> String {
-        switch interval {
-        case .oneSecond:
-            return t(.intervalOneSecond)
-        case .fiveSeconds:
-            return t(.intervalFiveSeconds)
-        case .fiveMinutes:
-            return t(.intervalFiveMinutes)
-        case .fifteenMinutes:
-            return t(.intervalFifteenMinutes)
-        case .thirtyMinutes:
-            return t(.intervalThirtyMinutes)
-        case .sixtyMinutes:
-            return t(.intervalSixtyMinutes)
-        case .oneEightyMinutes:
-            return t(.intervalOneEightyMinutes)
-        case .off:
-            return t(.intervalOff)
-        }
-    }
-
-    private func prependRecentFile(_ path: String) {
-        recentlySyncedFiles.insert(path, at: 0)
-        if recentlySyncedFiles.count > 50 {
-            recentlySyncedFiles.removeLast(recentlySyncedFiles.count - 50)
-        }
-    }
-
-    private func appendLog(_ line: String) {
-        let time = DateFormatter.logTimestamp.string(from: Date())
-        logLines.append("[\(time)] \(line)")
-        if logLines.count > 300 {
-            logLines.removeFirst(logLines.count - 300)
-        }
-    }
-
-    private func presentPermissionAlert() {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = t(.permissionAlertTitle)
-        alert.informativeText = t(.permissionAlertBody)
-        alert.addButton(withTitle: t(.permissionAlertPrimaryButton))
-        alert.addButton(withTitle: t(.permissionAlertSecondaryButton))
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-    }
-}
-
-private extension DateFormatter {
-    static let logTimestamp: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm:ss"
-        return f
+    private static let timeOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
     }()
 }

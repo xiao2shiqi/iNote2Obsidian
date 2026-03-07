@@ -1,116 +1,58 @@
-import AppKit
 import SwiftUI
 
+@available(macOS 13.0, *)
 struct MenuContentView: View {
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            headerSection
-            actionSection
-            outputSection
-            footerSection
-        }
-        .padding(12)
-        .frame(width: 340)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    Color(nsColor: .underPageBackgroundColor)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-    }
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("iNote2Obsidian")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                Spacer()
-                Label(viewModel.statusText, systemImage: viewModel.statusIconName)
-                    .font(.system(size: 12, weight: .medium, design: .default))
-                    .foregroundStyle(viewModel.statusColor)
-            }
-
+        VStack(alignment: .leading, spacing: 12) {
+            Text("iNote2Obsidian")
+                .font(.headline)
             Text(viewModel.statusMessage)
-                .font(.system(size: 12, weight: .regular, design: .default))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-
-            if let run = viewModel.lastRun {
-                Text("\(viewModel.t(.lastRunPrefix)): +\(run.added) ~\(run.updated) -\(run.deleted) !\(run.errors)")
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+            if let summary = viewModel.lastRunSummary {
+                Text("Last run: \(summary.scannedCount) scanned, \(summary.createdCount) created, \(summary.updatedCount) updated, \(summary.deletedCount) deleted")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
 
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                viewModel.focusMainWindowFromMenuBar()
-            } label: {
-                Label(viewModel.t(.menuOpenMainWindow), systemImage: "macwindow")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Button("Start") { viewModel.startSyncing() }
+                    .disabled(viewModel.runMode == .running)
+                Button("Stop") { viewModel.stopSyncing() }
+                    .disabled(viewModel.runMode == .stopped)
+                Button("Sync Now") { viewModel.syncNow() }
+                    .disabled(viewModel.runMode == .stopped)
             }
-            .buttonStyle(.bordered)
 
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.startSyncing()
-                } label: {
-                    Label(viewModel.t(.menuStart), systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
+            Divider()
+
+            HStack {
+                Button("Settings") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.accentColor)
-                .disabled(!viewModel.canStart)
-
-                Button {
-                    viewModel.stopSyncing()
-                } label: {
-                    Label(viewModel.t(.menuStop), systemImage: "stop.fill")
-                        .frame(maxWidth: .infinity)
+                Button("Sync Log") {
+                    openWindow(id: "sync-log")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.canStop)
             }
 
-            Button {
-                viewModel.checkForUpdates()
-            } label: {
-                Label(viewModel.t(.menuCheckUpdates), systemImage: "arrow.triangle.2.circlepath")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if !viewModel.logs.isEmpty {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(viewModel.logs.suffix(8).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(height: 130)
             }
-            .buttonStyle(.bordered)
         }
-    }
-
-    private var outputSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.t(.menuOutputPath))
-                .font(.system(size: 11, weight: .medium, design: .default))
-                .foregroundStyle(.secondary)
-            Text(viewModel.settings.outputRootPath)
-                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                .lineLimit(2)
-                .textSelection(.enabled)
-        }
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.7), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private var footerSection: some View {
-        Button(viewModel.t(.menuQuit)) {
-            NSApplication.shared.terminate(nil)
-        }
-        .buttonStyle(.plain)
-        .font(.system(size: 12, weight: .medium, design: .default))
-        .foregroundStyle(.secondary)
+        .padding(14)
+        .frame(width: 360)
     }
 }

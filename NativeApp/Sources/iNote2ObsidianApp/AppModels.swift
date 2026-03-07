@@ -5,237 +5,126 @@ enum SyncRunMode: String, Codable {
     case running
 }
 
-enum SyncHealth: String, Codable {
-    case ok
-    case warning
-}
-
-enum SyncLampState: String {
-    case red
-    case green
-    case yellow
-}
-
-enum SyncStatus: String, Codable {
+enum AppStatus: String, Codable {
     case idle
     case syncing
-    case success
-    case failedPermission
-    case failedRuntime
+    case healthy
+    case warning
+    case error
 }
 
-enum SyncInterval: String, CaseIterable, Identifiable, Codable {
-    case oneSecond = "1s"
-    case fiveSeconds = "5s"
-    case fiveMinutes = "5m"
-    case fifteenMinutes = "15m"
-    case thirtyMinutes = "30m"
-    case sixtyMinutes = "60m"
-    case oneEightyMinutes = "180m"
-    case off = "off"
+struct AppSettings: Codable, Equatable {
+    var vaultPath: String
+    var attachmentsFolderName: String
+    var pollIntervalSeconds: TimeInterval
+    var lastRunMode: SyncRunMode
 
-    var id: String { rawValue }
-
-    var seconds: TimeInterval? {
-        switch self {
-        case .oneSecond: return 1
-        case .fiveSeconds: return 5
-        case .fiveMinutes: return 300
-        case .fifteenMinutes: return 900
-        case .thirtyMinutes: return 1800
-        case .sixtyMinutes: return 3600
-        case .oneEightyMinutes: return 10800
-        case .off: return nil
-        }
+    static var `default`: AppSettings {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return AppSettings(
+            vaultPath: home.appendingPathComponent("Documents/Obsidian").path,
+            attachmentsFolderName: "attachments",
+            pollIntervalSeconds: 1,
+            lastRunMode: .stopped
+        )
     }
 }
 
-enum AppLanguage: String, CaseIterable, Identifiable, Codable {
-    case english = "en"
-    case simplifiedChinese = "zh-Hans"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .english: return "English"
-        case .simplifiedChinese: return "简体中文"
-        }
-    }
-}
-
-struct SyncRunStats: Codable, Equatable {
-    var startedAt: Date
-    var endedAt: Date
-    var added: Int
-    var updated: Int
-    var skipped: Int
-    var deleted: Int
-    var errors: Int
-    var status: SyncStatus
-}
-
-enum SyncProgressStage {
-    case fetching
-    case queueReady
-    case noteProcessed
-    case completed
-}
-
-enum SyncNoteEventType {
-    case added
-    case updated
-    case skipped
-    case failed
-}
-
-struct SyncProgress {
-    var stage: SyncProgressStage
-    var total: Int
-    var totalKnown: Bool
-    var scanned: Int
-    var matched: Int
-    var pending: Int
-    var currentNote: String?
-    var eventType: SyncNoteEventType?
-    var outputFile: String?
-    var message: String?
-    var queuePreview: [String]
-}
-
-struct SourceAttachment {
+struct SourceImage: Equatable {
+    var suggestedFilename: String?
     var mimeType: String
     var data: Data
 }
 
-struct SourceNote {
-    var noteID: String
+struct SourceNote: Equatable {
+    var appleNoteID: String
     var title: String
     var folderPath: String
     var createdAt: Date
     var updatedAt: Date
-    var bodyPlain: String
-    var bodyHTML: String
-    var inlineAttachments: [SourceAttachment]
+    var plainText: String
+    var htmlBody: String
 }
 
-struct RenderedNote {
-    var markdown: String
-    var folderPath: String
-    var preferredMarkdownFilename: String
-    var sourceNoteID: String
-    var attachments: [RenderedAttachment]
-}
-
-struct RenderedAttachment {
+struct RenderedAsset: Equatable {
     var relativePath: String
     var data: Data
 }
 
-struct AppSettings: Codable, Equatable {
-    static let managedOutputDirectoryName = "apple-Notes"
-
-    var outputRootPath: String
-    var syncInterval: SyncInterval
-    var excludeRecentlyDeleted: Bool
-    var autoStartAtLogin: Bool
-    var language: AppLanguage
-    var lastRunMode: SyncRunMode
-    var totalSyncRounds: Int
-
-    private enum CodingKeys: String, CodingKey {
-        case outputRootPath
-        case syncInterval
-        case excludeRecentlyDeleted
-        case autoStartAtLogin
-        case language
-        case lastRunMode
-        case totalSyncRounds
-    }
-
-    init(
-        outputRootPath: String,
-        syncInterval: SyncInterval,
-        excludeRecentlyDeleted: Bool,
-        autoStartAtLogin: Bool,
-        language: AppLanguage,
-        lastRunMode: SyncRunMode,
-        totalSyncRounds: Int
-    ) {
-        self.outputRootPath = outputRootPath
-        self.syncInterval = syncInterval
-        self.excludeRecentlyDeleted = excludeRecentlyDeleted
-        self.autoStartAtLogin = autoStartAtLogin
-        self.language = language
-        self.lastRunMode = lastRunMode
-        self.totalSyncRounds = totalSyncRounds
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        outputRootPath = try container.decode(String.self, forKey: .outputRootPath)
-        syncInterval = try container.decode(SyncInterval.self, forKey: .syncInterval)
-        excludeRecentlyDeleted = try container.decode(Bool.self, forKey: .excludeRecentlyDeleted)
-        autoStartAtLogin = try container.decode(Bool.self, forKey: .autoStartAtLogin)
-        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .english
-        lastRunMode = try container.decode(SyncRunMode.self, forKey: .lastRunMode)
-        totalSyncRounds = try container.decode(Int.self, forKey: .totalSyncRounds)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(outputRootPath, forKey: .outputRootPath)
-        try container.encode(syncInterval, forKey: .syncInterval)
-        try container.encode(excludeRecentlyDeleted, forKey: .excludeRecentlyDeleted)
-        try container.encode(autoStartAtLogin, forKey: .autoStartAtLogin)
-        try container.encode(language, forKey: .language)
-        try container.encode(lastRunMode, forKey: .lastRunMode)
-        try container.encode(totalSyncRounds, forKey: .totalSyncRounds)
-    }
-
-    static var `default`: AppSettings {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let defaultOutput = home.appendingPathComponent("Documents/iNote").path
-        return AppSettings(
-            outputRootPath: defaultOutput,
-            syncInterval: .oneSecond,
-            excludeRecentlyDeleted: true,
-            autoStartAtLogin: true,
-            language: .english,
-            lastRunMode: .stopped,
-            totalSyncRounds: 0
-        )
-    }
-
-    var managedOutputRootPath: String {
-        URL(fileURLWithPath: outputRootPath, isDirectory: true)
-            .appendingPathComponent(Self.managedOutputDirectoryName, isDirectory: true)
-            .path
-    }
+struct RenderedNote: Equatable {
+    var markdown: String
+    var contentHash: String
+    var assetManifestHash: String
+    var assets: [RenderedAsset]
+    var warnings: [String]
 }
 
-enum SyncError: Error {
-    case permissionDenied(String)
+struct ManagedNoteState: Equatable {
+    var appleNoteID: String
+    var createdAt: String
+    var updatedAt: String
+    var sourceFolderPath: String
+    var noteRelativePath: String
+    var assetRelativeDir: String
+    var contentHash: String
+    var assetManifestHash: String
+    var lastSeenAt: String
+    var missingScanCount: Int
+    var isDeleted: Bool
+}
+
+enum SyncAction: Equatable {
+    case create(PlannedNote)
+    case update(PlannedNote, previous: ManagedNoteState)
+    case move(PlannedNote, previous: ManagedNoteState)
+    case delete(ManagedNoteState)
+    case markMissing(ManagedNoteState, nextMissingCount: Int)
+    case noop(PlannedNote, previous: ManagedNoteState)
+}
+
+struct PlannedNote: Equatable {
+    var note: SourceNote
+    var stableBaseName: String
+    var noteRelativePath: String
+    var assetRelativeDir: String
+}
+
+struct SyncRunSummary: Equatable {
+    var scannedCount: Int
+    var createdCount: Int
+    var updatedCount: Int
+    var movedCount: Int
+    var deletedCount: Int
+    var warningCount: Int
+    var errorCount: Int
+    var duration: TimeInterval
+}
+
+enum SyncError: Error, LocalizedError {
+    case permissionDenied
     case bridgeFailed(String)
-    case invalidPayload(String)
+    case invalidVaultPath
     case io(String)
     case db(String)
-    case cancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            return "Apple Notes automation permission is required."
+        case .bridgeFailed(let detail):
+            return "Apple Notes bridge failed: \(detail)"
+        case .invalidVaultPath:
+            return "Choose an Obsidian vault directory before starting sync."
+        case .io(let detail):
+            return "I/O error: \(detail)"
+        case .db(let detail):
+            return "Database error: \(detail)"
+        }
+    }
 }
 
-final class SyncCancellationController: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cancelled = false
-
-    func cancel() {
-        lock.lock()
-        cancelled = true
-        lock.unlock()
-    }
-
-    var isCancelled: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return cancelled
-    }
+struct SyncLogEntry: Identifiable, Equatable {
+    var id: UUID = UUID()
+    var timestamp: Date
+    var message: String
 }
