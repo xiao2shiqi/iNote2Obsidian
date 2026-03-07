@@ -1,10 +1,15 @@
 import Foundation
 
 struct ExistingNoteIndex {
-    let bySourceID: [String: String]
+    struct Entry {
+        let relativePath: String
+        let contentHash: String?
+    }
+
+    let bySourceID: [String: Entry]
 
     static func build(outputRoot: URL, logger: AppLogger) -> ExistingNoteIndex {
-        var bestByID: [String: (relativePath: String, modifiedAt: Date)] = [:]
+        var bestByID: [String: (entry: Entry, modifiedAt: Date)] = [:]
         let fm = FileManager.default
 
         guard let enumerator = fm.enumerator(
@@ -17,23 +22,24 @@ struct ExistingNoteIndex {
 
         for case let fileURL as URL in enumerator {
             guard fileURL.pathExtension.lowercased() == "md" else { continue }
-            guard let sourceID = extractSourceNoteID(from: fileURL) else { continue }
+            guard let frontmatter = extractFrontmatter(from: fileURL) else { continue }
 
             let rel = relativePath(from: outputRoot, to: fileURL)
             let attrs = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
             let modified = attrs?.contentModificationDate ?? Date.distantPast
+            let entry = Entry(relativePath: rel, contentHash: frontmatter.contentHash)
 
-            if let existing = bestByID[sourceID] {
+            if let existing = bestByID[frontmatter.sourceID] {
                 if modified > existing.modifiedAt {
-                    bestByID[sourceID] = (rel, modified)
-                    logger.info("duplicate source_note_id found, choose newer file: \(sourceID)")
+                    bestByID[frontmatter.sourceID] = (entry, modified)
+                    logger.info("duplicate source_note_id found, choose newer file: \(frontmatter.sourceID)")
                 }
             } else {
-                bestByID[sourceID] = (rel, modified)
+                bestByID[frontmatter.sourceID] = (entry, modified)
             }
         }
 
-        return ExistingNoteIndex(bySourceID: bestByID.mapValues { $0.relativePath })
+        return ExistingNoteIndex(bySourceID: bestByID.mapValues { $0.entry })
     }
 
     private static func relativePath(from root: URL, to fileURL: URL) -> String {
@@ -44,34 +50,49 @@ struct ExistingNoteIndex {
         return fileURL.lastPathComponent
     }
 
-    private static func extractSourceNoteID(from fileURL: URL) -> String? {
+    private static func extractFrontmatter(from fileURL: URL) -> (sourceID: String, contentHash: String?)? {
         guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return nil }
-        return extractSourceNoteID(fromMarkdown: text)
+        return extractFrontmatter(fromMarkdown: text)
     }
 
     static func extractSourceNoteID(fromMarkdown markdown: String) -> String? {
+        extractFrontmatter(fromMarkdown: markdown)?.sourceID
+    }
+
+    static func extractSourceContentHash(fromMarkdown markdown: String) -> String? {
+        extractFrontmatter(fromMarkdown: markdown)?.contentHash
+    }
+
+    private static func extractFrontmatter(fromMarkdown markdown: String) -> (sourceID: String, contentHash: String?)? {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
         guard let first = lines.first, first.trimmingCharacters(in: .whitespaces) == "---" else {
             return nil
         }
 
+        var sourceID: String?
+        var contentHash: String?
         for line in lines.dropFirst() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed == "---" {
                 break
             }
             if trimmed.hasPrefix("source_note_id:") {
-                let value = trimmed
-                    .split(separator: ":", maxSplits: 1)
-                    .dropFirst()
-                    .first?
-                    .trimmingCharacters(in: .whitespaces)
-                    .replacingOccurrences(of: "\"", with: "")
-                if let value, !value.isEmpty {
-                    return value
-                }
+                sourceID = extractValue(from: trimmed)
+            }
+            if trimmed.hasPrefix("source_content_hash:") {
+                contentHash = extractValue(from: trimmed)
             }
         }
-        return nil
+        guard let sourceID, !sourceID.isEmpty else { return nil }
+        return (sourceID, contentHash)
+    }
+
+    private static func extractValue(from line: String) -> String? {
+        line
+            .split(separator: ":", maxSplits: 1)
+            .dropFirst()
+            .first?
+            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "\"", with: "")
     }
 }

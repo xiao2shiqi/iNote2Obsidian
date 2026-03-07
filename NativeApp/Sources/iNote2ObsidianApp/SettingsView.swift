@@ -155,12 +155,9 @@ struct SettingsView: View {
                 .font(AppTypography.title)
 
             HStack(spacing: 10) {
-                statCard(title: viewModel.primaryMetricTitle, value: viewModel.primaryMetricValue)
-                statCard(
-                    title: viewModel.t(.pending),
-                    value: viewModel.pendingDisplayValue,
-                    detail: viewModel.isPendingCountAvailable ? nil : viewModel.t(.valueCalculating)
-                )
+                statCard(title: viewModel.t(.appleNotes), value: viewModel.appleNotesDisplayValue)
+                statCard(title: viewModel.t(.matched), value: viewModel.matchedDisplayValue)
+                statCard(title: viewModel.t(.pending), value: viewModel.pendingDisplayValue)
             }
 
             Text(viewModel.realtimeDetailMessage)

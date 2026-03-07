@@ -41,4 +41,23 @@ final class MarkdownTransformerTests: XCTestCase {
         XCTAssertTrue(rendered.attachments[0].relativePath.starts(with: "attachments/"))
         XCTAssertTrue(rendered.markdown.contains("../../attachments/"))
     }
+
+    func testRenderedMarkdownIncludesStableBodyHash() {
+        let transformer = MarkdownTransformer()
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let note = SourceNote(
+            noteID: "id-3",
+            title: "T",
+            folderPath: "Notes",
+            createdAt: date,
+            updatedAt: date,
+            bodyPlain: "Hello world",
+            bodyHTML: "",
+            inlineAttachments: []
+        )
+
+        let rendered = transformer.render(note: note, outputRoot: URL(fileURLWithPath: "/tmp"), runDate: date)
+        XCTAssertTrue(rendered.markdown.contains("source_content_hash:"))
+        XCTAssertEqual(transformer.bodyHash(for: note), "86dfeae555fbfa19")
+    }
 }

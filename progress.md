@@ -319,3 +319,11 @@ A working CLI MVP exists and is used as the migration baseline.
   - Changed the CLI `launchd` template default `StartInterval` from 300 seconds to 5 seconds.
   - Added a `5 seconds` option to the native app sync interval selector.
   - Changed the native app default sync interval from `5 minutes` to `5 seconds`.
+
+## Iteration Note (2026-03-07, Match-By-Hash Realtime Counters)
+- Goal:
+  - Replace scan-only progress with realtime `Apple Notes total / matched / pending` counts based on actual exported markdown identity and body hash.
+- Scope:
+  - Match success requires both `source_note_id` and body `source_content_hash`.
+  - `Recently Deleted` stays excluded.
+  - Attachments are intentionally excluded from the hash in this fast version.

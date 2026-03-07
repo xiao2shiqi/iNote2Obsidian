@@ -92,7 +92,7 @@ struct SyncProgress {
     var total: Int
     var totalKnown: Bool
     var scanned: Int
-    var synced: Int
+    var matched: Int
     var pending: Int
     var currentNote: String?
     var eventType: SyncNoteEventType?

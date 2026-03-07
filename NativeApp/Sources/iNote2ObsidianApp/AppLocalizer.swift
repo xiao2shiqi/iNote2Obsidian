@@ -14,8 +14,8 @@ enum L10nKey: Hashable, CaseIterable {
     case recentError
 
     case realtimePanel
-    case scanned
-    case synced
+    case appleNotes
+    case matched
     case rounds
     case total
     case processed
@@ -99,8 +99,8 @@ struct AppLocalizer {
             .recentError: "Recent Error",
 
             .realtimePanel: "Realtime",
-            .scanned: "Scanned",
-            .synced: "Synced",
+            .appleNotes: "Apple Notes",
+            .matched: "Matched",
             .rounds: "Rounds",
             .total: "Total",
             .processed: "Processed",
@@ -147,7 +147,7 @@ struct AppLocalizer {
             .messageFetchingNotes: "Fetching notes...",
             .messageFetchingNotesStreaming: "Fetching notes from Apple Notes (streaming)...",
             .messageScannedNotes: "Scanned %@ notes...",
-            .messageScanningRealtime: "Scanning Apple Notes. Remaining count is still being calculated.",
+            .messageScanningRealtime: "Scanning Apple Notes and comparing content hashes in realtime.",
             .messageBridgeHeartbeatTimeout: "Sync timed out while reading Apple Notes. Please reopen Notes and try again.",
             .messageQueueReady: "Queue ready:",
             .messageSyncCompleted: "Sync completed",
@@ -172,8 +172,8 @@ struct AppLocalizer {
             .recentError: "最近错误",
 
             .realtimePanel: "实时面板",
-            .scanned: "已扫描",
-            .synced: "已同步",
+            .appleNotes: "Apple Notes",
+            .matched: "已匹配",
             .rounds: "轮次",
             .total: "总量",
             .processed: "已处理",
@@ -220,7 +220,7 @@ struct AppLocalizer {
             .messageFetchingNotes: "正在读取笔记...",
             .messageFetchingNotesStreaming: "正在流式读取 Apple Notes...",
             .messageScannedNotes: "已扫描 %@ 条笔记...",
-            .messageScanningRealtime: "正在扫描 Apple Notes，剩余数量还在计算中。",
+            .messageScanningRealtime: "正在扫描 Apple Notes，并实时比对正文哈希。",
             .messageBridgeHeartbeatTimeout: "读取 Apple Notes 超时，请先打开备忘录后重试。",
             .messageQueueReady: "队列已就绪：",
             .messageSyncCompleted: "同步完成",

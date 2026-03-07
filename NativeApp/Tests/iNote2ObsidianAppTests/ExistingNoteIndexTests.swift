@@ -8,6 +8,7 @@ final class ExistingNoteIndexTests: XCTestCase {
         ---
         title: \"hello\"
         source_note_id: \"note-123\"
+        source_content_hash: \"abc123\"
         is_deleted_in_source: false
         ---
 
@@ -15,6 +16,7 @@ final class ExistingNoteIndexTests: XCTestCase {
         """
 
         XCTAssertEqual(ExistingNoteIndex.extractSourceNoteID(fromMarkdown: markdown), "note-123")
+        XCTAssertEqual(ExistingNoteIndex.extractSourceContentHash(fromMarkdown: markdown), "abc123")
     }
 
     func testBuildChoosesNewerFileWhenDuplicateSourceID() throws {
@@ -43,6 +45,6 @@ final class ExistingNoteIndexTests: XCTestCase {
 
         let logger = AppLogger(logURL: root.appendingPathComponent("test.log"))
         let index = ExistingNoteIndex.build(outputRoot: root, logger: logger)
-        XCTAssertEqual(index.bySourceID["dup-id"], "nested/b.md")
+        XCTAssertEqual(index.bySourceID["dup-id"]?.relativePath, "nested/b.md")
     }
 }

@@ -15,7 +15,7 @@ final class AppViewModel: ObservableObject {
     @Published var syncRoundsCompleted: Int = 0
     @Published var totalInCurrentRun: Int = 0
     @Published var scannedInCurrentRun: Int = 0
-    @Published var syncedInCurrentRun: Int = 0
+    @Published var matchedInCurrentRun: Int = 0
     @Published var pendingInCurrentRun: Int = 0
     @Published var isPendingCountAvailable: Bool = false
     @Published var pendingQueuePreview: [String] = []
@@ -310,17 +310,11 @@ final class AppViewModel: ObservableObject {
         status == .syncing && runMode == .running
     }
 
-    var pendingDisplayValue: String {
-        isPendingCountAvailable ? "\(pendingInCurrentRun)" : "--"
-    }
+    var appleNotesDisplayValue: String { "\(totalInCurrentRun)" }
 
-    var primaryMetricTitle: String {
-        isPendingCountAvailable ? t(.synced) : t(.scanned)
-    }
+    var matchedDisplayValue: String { "\(matchedInCurrentRun)" }
 
-    var primaryMetricValue: String {
-        isPendingCountAvailable ? "\(syncedInCurrentRun)" : "\(scannedInCurrentRun)"
-    }
+    var pendingDisplayValue: String { "\(pendingInCurrentRun)" }
 
     var managedOutputRootPath: String {
         settings.managedOutputRootPath
@@ -407,7 +401,7 @@ final class AppViewModel: ObservableObject {
     private func resetRealtimeRunState() {
         totalInCurrentRun = 0
         scannedInCurrentRun = 0
-        syncedInCurrentRun = 0
+        matchedInCurrentRun = 0
         pendingInCurrentRun = 0
         isPendingCountAvailable = false
         pendingQueuePreview = []
@@ -418,9 +412,12 @@ final class AppViewModel: ObservableObject {
     private func applyProgress(_ progress: SyncProgress) {
         totalInCurrentRun = progress.total
         scannedInCurrentRun = progress.scanned
-        syncedInCurrentRun = progress.synced
+        matchedInCurrentRun = progress.matched
         pendingInCurrentRun = progress.pending
         isPendingCountAvailable = progress.totalKnown
+        if !progress.totalKnown {
+            totalInCurrentRun = progress.scanned
+        }
 
         switch progress.stage {
         case .fetching:
@@ -441,8 +438,8 @@ final class AppViewModel: ObservableObject {
             }
         case .queueReady:
             pendingQueuePreview = progress.queuePreview
-            statusMessage = "\(t(.messageQueueReady)) \(progress.total)"
-            appendLog("Queue prepared: \(progress.total) notes")
+            statusMessage = "\(t(.messageQueueReady)) \(progress.pending)"
+            appendLog("Queue prepared: \(progress.pending) notes pending sync")
         case .noteProcessed:
             if let file = progress.outputFile {
                 prependRecentFile(file)
@@ -457,7 +454,7 @@ final class AppViewModel: ObservableObject {
                 }
                 let note = progress.currentNote ?? "Unknown"
                 let totalLabel = progress.totalKnown ? "\(progress.total)" : "?"
-                let progressLabel = progress.totalKnown ? "\(progress.synced)/\(totalLabel)" : "scan \(progress.scanned)"
+                let progressLabel = progress.totalKnown ? "\(progress.matched)/\(totalLabel)" : "scan \(progress.scanned)"
                 appendLog("[\(progressLabel)] \(label): \(note)")
             }
         case .completed:

@@ -20,12 +20,12 @@ final class SyncEngine {
         logger.info("sync started")
 
         var added = 0
-        let updated = 0
+        var updated = 0
         var skipped = 0
         var deleted = 0
         var errors = 0
         var scanned = 0
-        var synced = 0
+        var matched = 0
         var seenSourceIDs = Set<String>()
         var queuePreview: [String] = []
         var totalKnown = false
@@ -37,7 +37,7 @@ final class SyncEngine {
                 total: 0,
                 totalKnown: false,
                 scanned: 0,
-                synced: 0,
+                matched: 0,
                 pending: 0,
                 currentNote: nil,
                 eventType: nil,
@@ -61,10 +61,6 @@ final class SyncEngine {
                 scanned += 1
                 seenSourceIDs.insert(note.noteID)
 
-                if queuePreview.count < 30 {
-                    queuePreview.append("\(note.folderPath)/\(note.title)")
-                }
-
                 self.processNote(
                     note,
                     outputRoot: outputRoot,
@@ -73,9 +69,11 @@ final class SyncEngine {
                     stateStore: stateStore,
                     cancellation: cancellation,
                     added: &added,
+                    updated: &updated,
                     skipped: &skipped,
                     errors: &errors,
-                    synced: &synced,
+                    matched: &matched,
+                    queuePreview: &queuePreview,
                     total: total,
                     totalKnown: totalKnown,
                     scanned: scanned,
@@ -92,8 +90,8 @@ final class SyncEngine {
                         total: total,
                         totalKnown: false,
                         scanned: bridgeProgress.scannedCount,
-                        synced: synced,
-                        pending: 0,
+                        matched: matched,
+                        pending: max(bridgeProgress.scannedCount - matched, 0),
                         currentNote: nil,
                         eventType: nil,
                         outputFile: nil,
@@ -131,9 +129,11 @@ final class SyncEngine {
                     stateStore: stateStore,
                     cancellation: cancellation,
                     added: &added,
+                    updated: &updated,
                     skipped: &skipped,
                     errors: &errors,
-                    synced: &synced,
+                    matched: &matched,
+                    queuePreview: &queuePreview,
                     total: total,
                     totalKnown: totalKnown,
                     scanned: scanned,
@@ -150,8 +150,8 @@ final class SyncEngine {
                 total: total,
                 totalKnown: true,
                 scanned: scanned,
-                synced: synced,
-                pending: max(total - synced, 0),
+                matched: matched,
+                pending: max(total - matched, 0),
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,
@@ -180,8 +180,8 @@ final class SyncEngine {
                 total: total,
                 totalKnown: true,
                 scanned: scanned,
-                synced: synced,
-                pending: max(total - synced, 0),
+                matched: matched,
+                pending: max(total - matched, 0),
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,
@@ -240,16 +240,6 @@ final class SyncEngine {
         }
     }
 
-    private func hash(_ string: String) -> String {
-        let data = Data(string.utf8)
-        var hash: UInt64 = 1469598103934665603
-        for b in data {
-            hash ^= UInt64(b)
-            hash = hash &* 1099511628211
-        }
-        return String(format: "%016llx", hash)
-    }
-
     private func processNote(
         _ note: SourceNote,
         outputRoot: URL,
@@ -258,9 +248,11 @@ final class SyncEngine {
         stateStore: StateStore,
         cancellation: SyncCancellationController,
         added: inout Int,
+        updated: inout Int,
         skipped: inout Int,
         errors: inout Int,
-        synced: inout Int,
+        matched: inout Int,
+        queuePreview: inout [String],
         total: Int,
         totalKnown: Bool,
         scanned: Int,
@@ -270,26 +262,30 @@ final class SyncEngine {
             return
         }
 
-        if let existingRelativePath = existingIndex.bySourceID[note.noteID] {
+        let contentHash = transformer.bodyHash(for: note)
+
+        if let existing = existingIndex.bySourceID[note.noteID], existing.contentHash == contentHash {
             do {
                 try stateStore.upsertNoteState(
                     noteID: note.noteID,
                     folderPath: note.folderPath,
-                    contentHash: "exists-skip",
-                    markdownRelativePath: existingRelativePath,
+                    contentHash: contentHash,
+                    markdownRelativePath: existing.relativePath,
                     isDeleted: false
                 )
                 skipped += 1
+                matched += 1
                 emitProgress(
                     stage: .noteProcessed,
                     total: total,
                     totalKnown: totalKnown,
                     scanned: scanned,
-                    synced: synced,
+                    matched: matched,
+                    pending: max(scanned - matched, 0),
                     note: note.title,
                     event: .skipped,
-                    outputFile: existingRelativePath,
-                    message: "Skipped existing note",
+                    outputFile: existing.relativePath,
+                    message: "Matched existing note",
                     progress: progress
                 )
             } catch {
@@ -300,7 +296,8 @@ final class SyncEngine {
                     total: total,
                     totalKnown: totalKnown,
                     scanned: scanned,
-                    synced: synced,
+                    matched: matched,
+                    pending: max(scanned - matched, 0),
                     note: note.title,
                     event: .failed,
                     outputFile: nil,
@@ -313,12 +310,17 @@ final class SyncEngine {
 
         do {
             let rendered = transformer.render(note: note, outputRoot: outputRoot, runDate: start)
-            let relativePath = try resolveUniqueMarkdownPath(
-                baseFolder: rendered.folderPath,
-                preferredFilename: rendered.preferredMarkdownFilename,
-                outputRoot: outputRoot,
-                sourceNoteID: rendered.sourceNoteID
-            )
+            let relativePath: String
+            if let existing = existingIndex.bySourceID[note.noteID] {
+                relativePath = existing.relativePath
+            } else {
+                relativePath = try resolveUniqueMarkdownPath(
+                    baseFolder: rendered.folderPath,
+                    preferredFilename: rendered.preferredMarkdownFilename,
+                    outputRoot: outputRoot,
+                    sourceNoteID: rendered.sourceNoteID
+                )
+            }
 
             let markdownURL = outputRoot.appendingPathComponent(relativePath)
             try FileManager.default.createDirectory(at: markdownURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -336,23 +338,32 @@ final class SyncEngine {
             try stateStore.upsertNoteState(
                 noteID: note.noteID,
                 folderPath: rendered.folderPath,
-                contentHash: hash(rendered.markdown),
+                contentHash: contentHash,
                 markdownRelativePath: relativePath,
                 isDeleted: false
             )
 
-            added += 1
-            synced += 1
+            let wasExisting = existingIndex.bySourceID[note.noteID] != nil
+            if wasExisting {
+                updated += 1
+            } else {
+                added += 1
+            }
+            matched += 1
+            if !queuePreview.contains("\(note.folderPath)/\(note.title)") && queuePreview.count < 30 {
+                queuePreview.append("\(note.folderPath)/\(note.title)")
+            }
             emitProgress(
                 stage: .noteProcessed,
                 total: total,
                 totalKnown: totalKnown,
                 scanned: scanned,
-                synced: synced,
+                matched: matched,
+                pending: max(scanned - matched, 0),
                 note: note.title,
-                event: .added,
+                event: wasExisting ? .updated : .added,
                 outputFile: relativePath,
-                message: "Added note",
+                message: wasExisting ? "Updated note" : "Added note",
                 progress: progress
             )
         } catch {
@@ -363,7 +374,8 @@ final class SyncEngine {
                 total: total,
                 totalKnown: totalKnown,
                 scanned: scanned,
-                synced: synced,
+                matched: matched,
+                pending: max(scanned - matched, 0),
                 note: note.title,
                 event: .failed,
                 outputFile: nil,
@@ -378,7 +390,8 @@ final class SyncEngine {
         total: Int,
         totalKnown: Bool,
         scanned: Int,
-        synced: Int,
+        matched: Int,
+        pending: Int,
         note: String?,
         event: SyncNoteEventType?,
         outputFile: String?,
@@ -391,8 +404,8 @@ final class SyncEngine {
                 total: total,
                 totalKnown: totalKnown,
                 scanned: scanned,
-                synced: synced,
-                pending: 0,
+                matched: matched,
+                pending: pending,
                 currentNote: note,
                 eventType: event,
                 outputFile: outputFile,

@@ -19,11 +19,13 @@ struct MarkdownTransformer {
         let folderPath = sanitizeFolderPath(note.folderPath)
         let baseName = timestampFormatter.string(from: note.createdAt)
         let preferredMarkdownFilename = baseName + ".md"
+        let contentHash = bodyHash(for: note)
 
         var bodyLines: [String] = []
         bodyLines.append("---")
         bodyLines.append("source: apple_notes")
         bodyLines.append("source_note_id: \"\(note.noteID)\"")
+        bodyLines.append("source_content_hash: \"\(contentHash)\"")
         bodyLines.append("source_folder: \"\(folderPath)\"")
         bodyLines.append("source_created_at: \"\(isoFormatter.string(from: note.createdAt))\"")
         bodyLines.append("source_updated_at: \"\(isoFormatter.string(from: note.updatedAt))\"")
@@ -60,6 +62,10 @@ struct MarkdownTransformer {
         )
     }
 
+    func bodyHash(for note: SourceNote) -> String {
+        hash(normalizedBody(note.bodyPlain))
+    }
+
     func sanitizeFolderPath(_ path: String) -> String {
         let invalid = CharacterSet(charactersIn: "<>:\\|?*\0")
         return path
@@ -89,5 +95,19 @@ struct MarkdownTransformer {
         let depth = folderPath.isEmpty ? 0 : folderPath.split(separator: "/").count
         let prefix = Array(repeating: "..", count: depth).joined(separator: "/")
         return prefix.isEmpty ? target : prefix + "/" + target
+    }
+
+    private func normalizedBody(_ body: String) -> String {
+        body.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func hash(_ string: String) -> String {
+        let data = Data(string.utf8)
+        var hash: UInt64 = 1469598103934665603
+        for byte in data {
+            hash ^= UInt64(byte)
+            hash = hash &* 1099511628211
+        }
+        return String(format: "%016llx", hash)
     }
 }
