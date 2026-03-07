@@ -18,7 +18,7 @@ struct iNote2ObsidianApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
+        Window("Settings", id: "settings") {
             SettingsView(viewModel: viewModel)
                 .frame(width: 520, height: 220)
         }

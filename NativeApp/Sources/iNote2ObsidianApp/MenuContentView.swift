@@ -31,7 +31,7 @@ struct MenuContentView: View {
 
             HStack {
                 Button("Settings") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    openWindow(id: "settings")
                 }
                 Button("Sync Log") {
                     openWindow(id: "sync-log")
