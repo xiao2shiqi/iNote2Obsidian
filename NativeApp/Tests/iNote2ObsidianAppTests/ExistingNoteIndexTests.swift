@@ -7,6 +7,7 @@ final class ExistingNoteIndexTests: XCTestCase {
         let markdown = """
         ---
         title: \"hello\"
+        source_export_version: 2
         source_note_id: \"note-123\"
         source_content_hash: \"abc123\"
         is_deleted_in_source: false
@@ -17,6 +18,7 @@ final class ExistingNoteIndexTests: XCTestCase {
 
         XCTAssertEqual(ExistingNoteIndex.extractSourceNoteID(fromMarkdown: markdown), "note-123")
         XCTAssertEqual(ExistingNoteIndex.extractSourceContentHash(fromMarkdown: markdown), "abc123")
+        XCTAssertEqual(ExistingNoteIndex.extractSourceExportVersion(fromMarkdown: markdown), 2)
     }
 
     func testBuildChoosesNewerFileWhenDuplicateSourceID() throws {

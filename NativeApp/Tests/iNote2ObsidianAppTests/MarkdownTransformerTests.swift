@@ -60,4 +60,31 @@ final class MarkdownTransformerTests: XCTestCase {
         XCTAssertTrue(rendered.markdown.contains("source_content_hash:"))
         XCTAssertEqual(transformer.bodyHash(for: note), "86dfeae555fbfa19")
     }
+
+    func testBodyHashChangesWhenAttachmentChanges() {
+        let transformer = MarkdownTransformer()
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let noteA = SourceNote(
+            noteID: "id-4",
+            title: "T",
+            folderPath: "Notes",
+            createdAt: date,
+            updatedAt: date,
+            bodyPlain: "Hello world",
+            bodyHTML: "",
+            inlineAttachments: [SourceAttachment(mimeType: "image/png", data: Data([1, 2, 3]))]
+        )
+        let noteB = SourceNote(
+            noteID: "id-4",
+            title: "T",
+            folderPath: "Notes",
+            createdAt: date,
+            updatedAt: date,
+            bodyPlain: "Hello world",
+            bodyHTML: "",
+            inlineAttachments: [SourceAttachment(mimeType: "image/png", data: Data([1, 2, 4]))]
+        )
+
+        XCTAssertNotEqual(transformer.bodyHash(for: noteA), transformer.bodyHash(for: noteB))
+    }
 }

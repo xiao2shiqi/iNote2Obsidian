@@ -4,6 +4,7 @@ struct ExistingNoteIndex {
     struct Entry {
         let relativePath: String
         let contentHash: String?
+        let exportVersion: Int?
     }
 
     let bySourceID: [String: Entry]
@@ -27,7 +28,11 @@ struct ExistingNoteIndex {
             let rel = relativePath(from: outputRoot, to: fileURL)
             let attrs = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
             let modified = attrs?.contentModificationDate ?? Date.distantPast
-            let entry = Entry(relativePath: rel, contentHash: frontmatter.contentHash)
+            let entry = Entry(
+                relativePath: rel,
+                contentHash: frontmatter.contentHash,
+                exportVersion: frontmatter.exportVersion
+            )
 
             if let existing = bestByID[frontmatter.sourceID] {
                 if modified > existing.modifiedAt {
@@ -50,7 +55,7 @@ struct ExistingNoteIndex {
         return fileURL.lastPathComponent
     }
 
-    private static func extractFrontmatter(from fileURL: URL) -> (sourceID: String, contentHash: String?)? {
+    private static func extractFrontmatter(from fileURL: URL) -> (sourceID: String, contentHash: String?, exportVersion: Int?)? {
         guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return nil }
         return extractFrontmatter(fromMarkdown: text)
     }
@@ -63,7 +68,11 @@ struct ExistingNoteIndex {
         extractFrontmatter(fromMarkdown: markdown)?.contentHash
     }
 
-    private static func extractFrontmatter(fromMarkdown markdown: String) -> (sourceID: String, contentHash: String?)? {
+    static func extractSourceExportVersion(fromMarkdown markdown: String) -> Int? {
+        extractFrontmatter(fromMarkdown: markdown)?.exportVersion
+    }
+
+    private static func extractFrontmatter(fromMarkdown markdown: String) -> (sourceID: String, contentHash: String?, exportVersion: Int?)? {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
         guard let first = lines.first, first.trimmingCharacters(in: .whitespaces) == "---" else {
             return nil
@@ -71,6 +80,7 @@ struct ExistingNoteIndex {
 
         var sourceID: String?
         var contentHash: String?
+        var exportVersion: Int?
         for line in lines.dropFirst() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed == "---" {
@@ -82,9 +92,12 @@ struct ExistingNoteIndex {
             if trimmed.hasPrefix("source_content_hash:") {
                 contentHash = extractValue(from: trimmed)
             }
+            if trimmed.hasPrefix("source_export_version:") {
+                exportVersion = extractValue(from: trimmed).flatMap(Int.init)
+            }
         }
         guard let sourceID, !sourceID.isEmpty else { return nil }
-        return (sourceID, contentHash)
+        return (sourceID, contentHash, exportVersion)
     }
 
     private static func extractValue(from line: String) -> String? {

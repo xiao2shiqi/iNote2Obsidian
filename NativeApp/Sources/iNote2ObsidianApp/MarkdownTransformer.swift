@@ -1,6 +1,8 @@
 import Foundation
 
 struct MarkdownTransformer {
+    static let exportVersion = 2
+
     private let timestampFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -24,6 +26,7 @@ struct MarkdownTransformer {
         var bodyLines: [String] = []
         bodyLines.append("---")
         bodyLines.append("source: apple_notes")
+        bodyLines.append("source_export_version: \(Self.exportVersion)")
         bodyLines.append("source_note_id: \"\(note.noteID)\"")
         bodyLines.append("source_content_hash: \"\(contentHash)\"")
         bodyLines.append("source_folder: \"\(folderPath)\"")
@@ -63,7 +66,14 @@ struct MarkdownTransformer {
     }
 
     func bodyHash(for note: SourceNote) -> String {
-        hash(normalizedBody(note.bodyPlain))
+        var parts = [normalizedBody(note.bodyPlain)]
+        if !note.inlineAttachments.isEmpty {
+            let attachmentDigests = note.inlineAttachments.map { attachment in
+                attachment.mimeType.lowercased() + ":" + hashData(attachment.data)
+            }
+            parts.append(contentsOf: attachmentDigests)
+        }
+        return hash(parts.joined(separator: "\n"))
     }
 
     func sanitizeFolderPath(_ path: String) -> String {
@@ -103,6 +113,10 @@ struct MarkdownTransformer {
 
     private func hash(_ string: String) -> String {
         let data = Data(string.utf8)
+        return hashData(data)
+    }
+
+    private func hashData(_ data: Data) -> String {
         var hash: UInt64 = 1469598103934665603
         for byte in data {
             hash ^= UInt64(byte)

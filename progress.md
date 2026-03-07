@@ -250,6 +250,21 @@ A working CLI MVP exists and is used as the migration baseline.
   - Treat the current export path and simplified UI as the stable baseline.
   - Begin the next planning round from the remaining product/architecture tradeoffs rather than from sync correctness debugging.
 
+## Iteration Note (2026-03-07, Native Inline Image Restore)
+- Goal:
+  - Restore Apple Notes inline image export in the native app without giving up the stable header-first sync path.
+- Root Cause:
+  - The native `NotesBridge.fetchNoteDetails(...)` path returned `body_html: ""`, so `InlineAttachmentExtractor` never received any `<img src="data:...">` payload to decode.
+  - Legacy exported markdown also lacked an export-format marker, so unchanged notes would have been skipped forever even after restoring HTML fetch.
+- Completed:
+  - Updated native detail fetch to read `note.body()` into `body_html`.
+  - Kept attachment extraction in the app layer and restored inline image write-through into `attachments/`.
+  - Changed native content hashing to include inline attachment bytes so image-only edits are detected.
+  - Added `source_export_version: 2` to rendered markdown and require that version for fast-match skips, forcing one safe rewrite of legacy markdown that was exported before image restoration.
+  - Added/updated Swift tests for frontmatter export version parsing and attachment-sensitive body hashing.
+- Remaining:
+  - Validate the restored image export against a real Apple Notes note containing inline images and check whether non-inline file attachments need a separate bridge strategy.
+
 ## Iteration Note (2026-03-07, Realtime Pending-State Clarification)
 - Goal:
   - Avoid misleading `Processed 0 / Pending 0` display while the app is still scanning Apple Notes and has not calculated the remaining count yet.

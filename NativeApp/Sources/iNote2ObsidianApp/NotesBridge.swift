@@ -256,6 +256,8 @@ function walk(folder, parentPath, noteID) {
       if (String(note.id()) === noteID) {
         var plain = '';
         try { plain = String(note.plaintext() || ''); } catch (e) { plain = ''; }
+        var html = '';
+        try { html = String(note.body() || ''); } catch (e) { html = ''; }
         return {
           note_id: String(note.id()),
           title: String(note.name() || ''),
@@ -263,7 +265,7 @@ function walk(folder, parentPath, noteID) {
           created_at_ms: toEpochMs(note.creationDate()),
           updated_at_ms: toEpochMs(note.modificationDate()),
           body_plain: plain,
-          body_html: ''
+          body_html: html
         };
       }
     } catch (e) {

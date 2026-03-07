@@ -243,7 +243,8 @@ final class SyncEngine {
             previous.sourceUpdatedAt == isoString(header.updatedAt),
             let existing = existingIndex.bySourceID[header.noteID],
             existing.relativePath == previous.markdownRelativePath,
-            existing.contentHash == previous.contentHash
+            existing.contentHash == previous.contentHash,
+            existing.exportVersion == MarkdownTransformer.exportVersion
         else {
             return false
         }
@@ -300,7 +301,11 @@ final class SyncEngine {
 
         let contentHash = transformer.bodyHash(for: note)
 
-        if let existing = existingIndex.bySourceID[note.noteID], existing.contentHash == contentHash {
+        if
+            let existing = existingIndex.bySourceID[note.noteID],
+            existing.contentHash == contentHash,
+            existing.exportVersion == MarkdownTransformer.exportVersion
+        {
             do {
                 try stateStore.upsertNoteState(
                     noteID: note.noteID,
