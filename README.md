@@ -4,6 +4,15 @@ English | [中文](README.zh-CN.md)
 
 `iNote2Obsidian` is a native macOS menu bar app for one-way sync from Apple Notes to Obsidian.
 
+## Background
+
+This project exists to solve a practical sync problem for people who actively use both Apple Notes and Obsidian.
+
+- It is built for Apple Notes + Obsidian users who want a stable bridge between the two ecosystems.
+- It lets users stay on Apple Notes on mobile while using Obsidian and desktop Office workflows for knowledge management on macOS.
+- It breaks part of the Apple Notes data silo by exporting notes and attachments into a user-controlled directory.
+- It makes Apple Notes content easier to turn into larger documents, archives, and AI-ready context with both text and assets available outside the Notes app.
+
 ## Current Product Direction
 
 - Form factor: native macOS app built with `SwiftUI + AppKit`
@@ -29,6 +38,7 @@ English | [中文](README.zh-CN.md)
 - [NativeApp](/Users/phoenix/Documents/workspace/iNote2Obsidian/NativeApp): native macOS app source
 - [progress.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/progress.md): product source of truth and iteration log
 - [AGENTS.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/AGENTS.md): collaboration rules
+- [LICENSE](/Users/phoenix/Documents/workspace/iNote2Obsidian/LICENSE): MIT license
 
 ## Build
 
@@ -51,3 +61,7 @@ swift build
 - No login-item installation yet
 - Rich text conversion is intentionally reduced to plain text + images in v1
 - Command-line toolchain on this machine can build the app with `swift build`, but does not provide a working Swift test module
+
+## License
+
+This project is released under the MIT License.

@@ -4,6 +4,15 @@
 
 `iNote2Obsidian` 是一个原生 macOS 菜单栏应用，用于把 Apple Notes 单向同步到 Obsidian。
 
+## 项目背景
+
+这个项目首先是为了解决 Apple Notes 和 Obsidian 双端用户之间的真实同步问题。
+
+- 面向同时使用 Apple Notes 和 Obsidian 的用户，提供一个稳定的桥接方案。
+- 让用户在移动端继续使用备忘录，在桌面端结合 Obsidian 和 Office 软件做知识管理。
+- 打破 Apple Notes 相对封闭的数据边界，把资料和附件导出到用户指定目录。
+- 让这些内容更容易沉淀为大文档、资料归档，以及可供 AI 使用的更丰富上下文。
+
 ## 当前产品方向
 
 - 产品形态：基于 `SwiftUI + AppKit` 的原生 macOS 应用
@@ -29,6 +38,7 @@
 - [NativeApp](/Users/phoenix/Documents/workspace/iNote2Obsidian/NativeApp)：原生 macOS 应用源码
 - [progress.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/progress.md)：产品目标与迭代记录的唯一依据
 - [AGENTS.md](/Users/phoenix/Documents/workspace/iNote2Obsidian/AGENTS.md)：协作规则
+- [LICENSE](/Users/phoenix/Documents/workspace/iNote2Obsidian/LICENSE)：MIT 开源协议
 
 ## 构建
 
@@ -51,3 +61,7 @@ swift build
 - 还没有登录启动集成
 - 富文本在 v1 中有意降级为纯文本 + 图片
 - 当前这台机器的命令行 Swift 工具链可以通过 `swift build` 构建，但没有可用的 Swift 测试模块
+
+## 开源协议
+
+本项目采用 MIT License。

@@ -52,6 +52,7 @@ iNote2Obsidian 的当前目标是构建一个原生 macOS 菜单栏应用，将 
   - 目录迁移、覆盖更新、延迟删除保护
   - Markdown 输出与统一 `attachments/` 资源目录
 - `README.md` 与 `README.zh-CN.md` 已同步更新为新方案
+- 新增 `MIT` 开源协议，并补充 README 中的项目背景说明
 
 ## 当前状态
 
