@@ -11,7 +11,7 @@ struct BridgeSummary {
 }
 
 final class NotesBridge {
-    private static let streamScript = #"""
+    private static let headerStreamScript = #"""
 ObjC.import('Foundation');
 
 function emit(tag, payload) {
@@ -29,13 +29,17 @@ function run(argv) {
   var scanned = 0;
   var lastHeartbeatAt = Date.now();
 
-  function toISO(d) {
-    try { return (new Date(d)).toISOString(); } catch (e) { return ''; }
+  function toEpochMs(d) {
+    try {
+      var time = (new Date(d)).getTime();
+      if (isNaN(time)) { return null; }
+      return time;
+    } catch (e) { return null; }
   }
 
-  function maybeHeartbeat(folderPath) {
+  function maybeHeartbeat(folderPath, force) {
     var now = Date.now();
-    if ((scanned % 20) === 0 || (now - lastHeartbeatAt) >= 2000) {
+    if (force || (scanned % 20) === 0 || (now - lastHeartbeatAt) >= 2000) {
       emit('HEARTBEAT', {
         scanned: scanned,
         current_folder: folderPath
@@ -54,6 +58,7 @@ function run(argv) {
     }
 
     var currentPath = parentPath ? (parentPath + '/' + folderName) : folderName;
+    maybeHeartbeat(currentPath, true);
 
     var notes = [];
     try { notes = folder.notes(); } catch (e) { notes = []; }
@@ -65,12 +70,10 @@ function run(argv) {
           note_id: String(note.id()),
           title: String(note.name() || ''),
           folder_path: currentPath,
-          created_at: toISO(note.creationDate()),
-          updated_at: toISO(note.modificationDate()),
-          body_plain: String(note.plaintext() || ''),
-          body_html: String(note.body() || '')
+          created_at_ms: toEpochMs(note.creationDate()),
+          updated_at_ms: toEpochMs(note.modificationDate())
         });
-        maybeHeartbeat(currentPath);
+        maybeHeartbeat(currentPath, false);
       } catch (e) {
       }
     }
@@ -95,23 +98,98 @@ function run(argv) {
 }
 """#
 
+    private static let detailScript = #"""
+ObjC.import('Foundation');
+
+function toEpochMs(d) {
+  try {
+    var time = (new Date(d)).getTime();
+    if (isNaN(time)) { return null; }
+    return time;
+  } catch (e) { return null; }
+}
+
+function walk(folder, parentPath, noteID) {
+  var folderName = '';
+  try { folderName = String(folder.name() || ''); } catch (e) { return null; }
+  if (!folderName) { return null; }
+
+  var currentPath = parentPath ? (parentPath + '/' + folderName) : folderName;
+
+  var notes = [];
+  try { notes = folder.notes(); } catch (e) { notes = []; }
+  for (var i = 0; i < notes.length; i++) {
+    try {
+      var note = notes[i];
+      if (String(note.id()) === noteID) {
+        return {
+          note_id: String(note.id()),
+          title: String(note.name() || ''),
+          folder_path: currentPath,
+          created_at_ms: toEpochMs(note.creationDate()),
+          updated_at_ms: toEpochMs(note.modificationDate()),
+          body_plain: String(note.plaintext() || ''),
+          body_html: ''
+        };
+      }
+    } catch (e) {
+    }
+  }
+
+  var children = [];
+  try { children = folder.folders(); } catch (e) { children = []; }
+  for (var j = 0; j < children.length; j++) {
+    var found = walk(children[j], currentPath, noteID);
+    if (found) { return found; }
+  }
+
+  return null;
+}
+
+function run(argv) {
+  var noteID = argv[0];
+  var excludeRecentlyDeleted = argv[1] === 'true';
+  var app = Application('Notes');
+  app.includeStandardAdditions = true;
+
+  var accounts = app.accounts();
+  for (var a = 0; a < accounts.length; a++) {
+    var folders = [];
+    try { folders = accounts[a].folders(); } catch (e) { folders = []; }
+    for (var f = 0; f < folders.length; f++) {
+      var folderName = '';
+      try { folderName = String(folders[f].name() || ''); } catch (e) { folderName = ''; }
+      if (excludeRecentlyDeleted && folderName === 'Recently Deleted') {
+        continue;
+      }
+      var found = walk(folders[f], '', noteID);
+      if (found) {
+        return JSON.stringify(found);
+      }
+    }
+  }
+
+  return '';
+}
+"""#
+
     private let decoder = JSONDecoder()
 
-    func streamNotes(
+    func streamNoteHeaders(
         excludeRecentlyDeleted: Bool,
-        onNote: @escaping (SourceNote) -> Void,
+        onHeader: @escaping (SourceNoteHeader) -> Void,
         onProgress: @escaping (BridgeProgress) -> Void
     ) throws -> BridgeSummary {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", Self.streamScript, excludeRecentlyDeleted ? "true" : "false"]
+        process.arguments = ["-l", "JavaScript", "-e", Self.headerStreamScript, excludeRecentlyDeleted ? "true" : "false"]
 
         let stdout = Pipe()
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
 
-        let parser = NotesStreamParser(decoder: decoder, onNote: onNote, onProgress: onProgress)
+        let parser = NotesHeaderStreamParser(decoder: decoder, onHeader: onHeader, onProgress: onProgress)
 
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
@@ -126,7 +204,7 @@ function run(argv) {
         }
 
         try process.run()
-        let heartbeatTimeout: TimeInterval = 30
+        let heartbeatTimeout: TimeInterval = 90
 
         while process.isRunning {
             Thread.sleep(forTimeInterval: 0.05)
@@ -168,18 +246,74 @@ function run(argv) {
 
         return BridgeSummary(totalNotes: parser.doneTotal ?? parser.scannedCount)
     }
+
+    func fetchNoteDetails(noteID: String, fallback: SourceNoteHeader, excludeRecentlyDeleted: Bool) throws -> SourceNote {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-l", "JavaScript", "-e", Self.detailScript, noteID, excludeRecentlyDeleted ? "true" : "false"]
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        let timeout: TimeInterval = 15
+        let start = Date()
+        while process.isRunning {
+            Thread.sleep(forTimeInterval: 0.05)
+            if Date().timeIntervalSince(start) > timeout {
+                process.terminate()
+        return SourceNote(
+            noteID: fallback.noteID,
+            title: fallback.title,
+            folderPath: fallback.folderPath,
+            createdAt: fallback.createdAt,
+            updatedAt: fallback.updatedAt,
+            bodyPlain: "",
+            bodyHTML: "",
+            inlineAttachments: []
+        )
+            }
+        }
+
+        let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if process.terminationStatus != 0 {
+            if err.localizedCaseInsensitiveContains("not authorized") || err.localizedCaseInsensitiveContains("-1743") {
+                throw SyncError.permissionDenied(err)
+            }
+            throw SyncError.bridgeFailed(err.isEmpty ? "Apple Notes detail fetch failed" : err)
+        }
+
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        guard !data.isEmpty else {
+            return SourceNote(
+                noteID: fallback.noteID,
+                title: fallback.title,
+                folderPath: fallback.folderPath,
+                createdAt: fallback.createdAt,
+                updatedAt: fallback.updatedAt,
+                bodyPlain: "",
+                bodyHTML: "",
+                inlineAttachments: []
+            )
+        }
+
+        let raw = try decoder.decode(RawFullNote.self, from: data)
+        return raw.toSourceNote(fallback: fallback)
+    }
 }
 
-private final class NotesStreamParser: @unchecked Sendable {
+private final class NotesHeaderStreamParser: @unchecked Sendable {
     private enum StreamSource {
         case stdout
         case stderr
     }
 
     private let decoder: JSONDecoder
-    private let onNote: (SourceNote) -> Void
+    private let onHeader: (SourceNoteHeader) -> Void
     private let onProgress: (BridgeProgress) -> Void
-    private let queue = DispatchQueue(label: "inote.bridge.parser")
+    private let queue = DispatchQueue(label: "inote.bridge.header-parser")
 
     private var stdoutBuffer = ""
     private var stderrEventBuffer = ""
@@ -189,9 +323,9 @@ private final class NotesStreamParser: @unchecked Sendable {
     private var _scannedCount = 0
     private var _doneTotal: Int?
 
-    init(decoder: JSONDecoder, onNote: @escaping (SourceNote) -> Void, onProgress: @escaping (BridgeProgress) -> Void) {
+    init(decoder: JSONDecoder, onHeader: @escaping (SourceNoteHeader) -> Void, onProgress: @escaping (BridgeProgress) -> Void) {
         self.decoder = decoder
-        self.onNote = onNote
+        self.onHeader = onHeader
         self.onProgress = onProgress
     }
 
@@ -270,11 +404,11 @@ private final class NotesStreamParser: @unchecked Sendable {
             let raw = String(line.dropFirst(5))
             guard let data = raw.data(using: .utf8) else { return }
             do {
-                let noteRaw = try decoder.decode(RawNote.self, from: data)
-                guard let note = noteRaw.toSourceNote() else { return }
+                let noteRaw = try decoder.decode(RawHeaderNote.self, from: data)
+                guard let note = noteRaw.toSourceNoteHeader() else { return }
                 _scannedCount += 1
                 _lastHeartbeatAt = Date()
-                onNote(note)
+                onHeader(note)
                 onProgress(BridgeProgress(scannedCount: _scannedCount, currentFolder: note.folderPath, heartbeatAt: _lastHeartbeatAt))
             } catch {
                 _parseError = error
@@ -325,12 +459,40 @@ private struct DonePayload: Decodable {
     let total: Int?
 }
 
-private struct RawNote: Decodable {
+private struct RawHeaderNote: Decodable {
     let noteID: String
     let title: String
     let folderPath: String
-    let createdAt: String
-    let updatedAt: String
+    let createdAtMs: Double?
+    let updatedAtMs: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case noteID = "note_id"
+        case title
+        case folderPath = "folder_path"
+        case createdAtMs = "created_at_ms"
+        case updatedAtMs = "updated_at_ms"
+    }
+
+    func toSourceNoteHeader() -> SourceNoteHeader? {
+        let created = createdAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } ?? Date(timeIntervalSince1970: 0)
+        let updated = updatedAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } ?? created
+        return SourceNoteHeader(
+            noteID: noteID,
+            title: title.isEmpty ? "Untitled" : title,
+            folderPath: folderPath,
+            createdAt: created,
+            updatedAt: updated
+        )
+    }
+}
+
+private struct RawFullNote: Decodable {
+    let noteID: String
+    let title: String
+    let folderPath: String
+    let createdAtMs: Double?
+    let updatedAtMs: Double?
     let bodyPlain: String
     let bodyHTML: String
 
@@ -338,21 +500,19 @@ private struct RawNote: Decodable {
         case noteID = "note_id"
         case title
         case folderPath = "folder_path"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
+        case createdAtMs = "created_at_ms"
+        case updatedAtMs = "updated_at_ms"
         case bodyPlain = "body_plain"
         case bodyHTML = "body_html"
     }
 
-    func toSourceNote() -> SourceNote? {
-        let iso = ISO8601DateFormatter()
-        guard let created = iso.date(from: createdAt), let updated = iso.date(from: updatedAt) else {
-            return nil
-        }
+    func toSourceNote(fallback: SourceNoteHeader) -> SourceNote {
+        let created = createdAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } ?? fallback.createdAt
+        let updated = updatedAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } ?? fallback.updatedAt
         return SourceNote(
             noteID: noteID,
-            title: title.isEmpty ? "Untitled" : title,
-            folderPath: folderPath,
+            title: title.isEmpty ? fallback.title : title,
+            folderPath: folderPath.isEmpty ? fallback.folderPath : folderPath,
             createdAt: created,
             updatedAt: updated,
             bodyPlain: bodyPlain,

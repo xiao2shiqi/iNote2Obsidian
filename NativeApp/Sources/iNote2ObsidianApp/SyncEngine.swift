@@ -46,21 +46,21 @@ final class SyncEngine {
         try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
         let existingIndex = ExistingNoteIndex.build(outputRoot: outputRoot, logger: logger)
 
-        let bridgeSummary = try bridge.streamNotes(
+        let bridgeSummary = try bridge.streamNoteHeaders(
             excludeRecentlyDeleted: settings.excludeRecentlyDeleted,
-            onNote: { [self] note in
+            onHeader: { [self] header in
                 scanned += 1
-                seenSourceIDs.insert(note.noteID)
+                seenSourceIDs.insert(header.noteID)
 
                 if queuePreview.count < 30 {
-                    queuePreview.append("\(note.folderPath)/\(note.title)")
+                    queuePreview.append("\(header.folderPath)/\(header.title)")
                 }
 
-                if let existingRelativePath = existingIndex.bySourceID[note.noteID] {
+                if let existingRelativePath = existingIndex.bySourceID[header.noteID] {
                     do {
                         try stateStore.upsertNoteState(
-                            noteID: note.noteID,
-                            folderPath: note.folderPath,
+                            noteID: header.noteID,
+                            folderPath: header.folderPath,
                             contentHash: "exists-skip",
                             markdownRelativePath: existingRelativePath,
                             isDeleted: false
@@ -73,7 +73,7 @@ final class SyncEngine {
                                 total: max(scanned, processed),
                                 processed: processed,
                                 pending: 0,
-                                currentNote: note.title,
+                                currentNote: header.title,
                                 eventType: .skipped,
                                 outputFile: existingRelativePath,
                                 message: "Skipped existing note",
@@ -90,7 +90,7 @@ final class SyncEngine {
                                 total: max(scanned, processed),
                                 processed: processed,
                                 pending: 0,
-                                currentNote: note.title,
+                                currentNote: header.title,
                                 eventType: .failed,
                                 outputFile: nil,
                                 message: "Failed note: \(error.localizedDescription)",
@@ -102,6 +102,11 @@ final class SyncEngine {
                 }
 
                 do {
+                    let note = try self.bridge.fetchNoteDetails(
+                        noteID: header.noteID,
+                        fallback: header,
+                        excludeRecentlyDeleted: settings.excludeRecentlyDeleted
+                    )
                     let rendered = self.transformer.render(note: note, outputRoot: outputRoot, runDate: start)
                     let relativePath = try self.resolveUniqueMarkdownPath(
                         baseFolder: rendered.folderPath,
@@ -124,7 +129,7 @@ final class SyncEngine {
                     }
 
                     try stateStore.upsertNoteState(
-                        noteID: note.noteID,
+                        noteID: header.noteID,
                         folderPath: rendered.folderPath,
                         contentHash: self.hash(rendered.markdown),
                         markdownRelativePath: relativePath,
@@ -139,7 +144,7 @@ final class SyncEngine {
                             total: max(scanned, processed),
                             processed: processed,
                             pending: 0,
-                            currentNote: note.title,
+                            currentNote: header.title,
                             eventType: .added,
                             outputFile: relativePath,
                             message: "Added note",
@@ -156,7 +161,7 @@ final class SyncEngine {
                             total: max(scanned, processed),
                             processed: processed,
                             pending: 0,
-                            currentNote: note.title,
+                            currentNote: header.title,
                             eventType: .failed,
                             outputFile: nil,
                             message: "Failed note: \(error.localizedDescription)",

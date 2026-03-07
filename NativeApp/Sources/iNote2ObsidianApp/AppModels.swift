@@ -102,6 +102,14 @@ struct SourceAttachment {
     var data: Data
 }
 
+struct SourceNoteHeader {
+    var noteID: String
+    var title: String
+    var folderPath: String
+    var createdAt: Date
+    var updatedAt: Date
+}
+
 struct SourceNote {
     var noteID: String
     var title: String

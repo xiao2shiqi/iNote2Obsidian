@@ -155,55 +155,9 @@ struct SettingsView: View {
                 .font(AppTypography.title)
 
             HStack(spacing: 10) {
-                statCard(title: viewModel.t(.rounds), value: "\(viewModel.syncRoundsCompleted)")
-                statCard(title: viewModel.t(.total), value: "\(viewModel.totalInCurrentRun)")
                 statCard(title: viewModel.t(.processed), value: "\(viewModel.processedInCurrentRun)")
                 statCard(title: viewModel.t(.pending), value: "\(viewModel.pendingInCurrentRun)")
             }
-
-            HStack(alignment: .top, spacing: 10) {
-                listCard(title: viewModel.t(.recentlySynced)) {
-                    ForEach(viewModel.recentlySyncedFiles.prefix(12), id: \.self) { file in
-                        Text(file)
-                            .font(AppTypography.mono)
-                            .lineLimit(1)
-                            .textSelection(.enabled)
-                    }
-                    if viewModel.recentlySyncedFiles.isEmpty {
-                        Text(viewModel.t(.noFilesYet))
-                            .font(AppTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                listCard(title: viewModel.t(.waitingQueue)) {
-                    ForEach(viewModel.pendingQueuePreview.prefix(12), id: \.self) { item in
-                        Text(item)
-                            .font(AppTypography.caption)
-                            .lineLimit(1)
-                    }
-                    if viewModel.pendingQueuePreview.isEmpty {
-                        Text(viewModel.t(.noQueuedItems))
-                            .font(AppTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            listCard(title: viewModel.t(.logs)) {
-                ForEach(viewModel.logLines.suffix(80), id: \.self) { line in
-                    Text(line)
-                        .font(AppTypography.mono)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-                if viewModel.logLines.isEmpty {
-                    Text(viewModel.t(.noLogsYet))
-                        .font(AppTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(height: 150)
         }
         .padding(16)
         .glassCard(cornerRadius: 16)
@@ -215,27 +169,10 @@ struct SettingsView: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(AppTypography.metric)
+                .font(.system(size: 36, weight: .semibold, design: .rounded))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private func listCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(AppTypography.bodyStrong)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    content()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 118)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(10)
+        .padding(18)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
