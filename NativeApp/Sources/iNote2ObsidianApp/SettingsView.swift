@@ -155,7 +155,7 @@ struct SettingsView: View {
                 .font(AppTypography.title)
 
             HStack(spacing: 10) {
-                statCard(title: viewModel.t(.processed), value: "\(viewModel.processedInCurrentRun)")
+                statCard(title: viewModel.primaryMetricTitle, value: viewModel.primaryMetricValue)
                 statCard(
                     title: viewModel.t(.pending),
                     value: viewModel.pendingDisplayValue,
@@ -209,6 +209,11 @@ struct SettingsView: View {
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Text(viewModel.format(.managedOutputLocation, viewModel.managedOutputRootPath))
+                .font(AppTypography.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
         }
         .padding(16)
         .glassCard(cornerRadius: 16)

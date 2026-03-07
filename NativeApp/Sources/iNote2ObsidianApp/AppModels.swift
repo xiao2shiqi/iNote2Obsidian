@@ -88,7 +88,9 @@ enum SyncNoteEventType {
 struct SyncProgress {
     var stage: SyncProgressStage
     var total: Int
-    var processed: Int
+    var totalKnown: Bool
+    var scanned: Int
+    var synced: Int
     var pending: Int
     var currentNote: String?
     var eventType: SyncNoteEventType?
@@ -100,14 +102,6 @@ struct SyncProgress {
 struct SourceAttachment {
     var mimeType: String
     var data: Data
-}
-
-struct SourceNoteHeader {
-    var noteID: String
-    var title: String
-    var folderPath: String
-    var createdAt: Date
-    var updatedAt: Date
 }
 
 struct SourceNote {
@@ -135,6 +129,8 @@ struct RenderedAttachment {
 }
 
 struct AppSettings: Codable, Equatable {
+    static let managedOutputDirectoryName = "apple-Notes"
+
     var outputRootPath: String
     var syncInterval: SyncInterval
     var excludeRecentlyDeleted: Bool
@@ -205,6 +201,12 @@ struct AppSettings: Codable, Equatable {
             lastRunMode: .stopped,
             totalSyncRounds: 0
         )
+    }
+
+    var managedOutputRootPath: String {
+        URL(fileURLWithPath: outputRootPath, isDirectory: true)
+            .appendingPathComponent(Self.managedOutputDirectoryName, isDirectory: true)
+            .path
     }
 }
 

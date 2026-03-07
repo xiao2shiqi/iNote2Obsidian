@@ -24,15 +24,19 @@ final class SyncEngine {
         var deleted = 0
         var errors = 0
         var scanned = 0
-        var processed = 0
+        var synced = 0
         var seenSourceIDs = Set<String>()
         var queuePreview: [String] = []
+        var totalKnown = false
+        var total = 0
 
         progress?(
             SyncProgress(
                 stage: .fetching,
                 total: 0,
-                processed: 0,
+                totalKnown: false,
+                scanned: 0,
+                synced: 0,
                 pending: 0,
                 currentNote: nil,
                 eventType: nil,
@@ -42,38 +46,39 @@ final class SyncEngine {
             )
         )
 
-        let outputRoot = URL(fileURLWithPath: settings.outputRootPath, isDirectory: true)
+        let outputRoot = URL(fileURLWithPath: settings.managedOutputRootPath, isDirectory: true)
         try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
         let existingIndex = ExistingNoteIndex.build(outputRoot: outputRoot, logger: logger)
 
-        let bridgeSummary = try bridge.streamNoteHeaders(
+        let bridgeSummary = try bridge.streamNotes(
             excludeRecentlyDeleted: settings.excludeRecentlyDeleted,
-            onHeader: { [self] header in
+            onNote: { [self] note in
                 scanned += 1
-                seenSourceIDs.insert(header.noteID)
+                seenSourceIDs.insert(note.noteID)
 
                 if queuePreview.count < 30 {
-                    queuePreview.append("\(header.folderPath)/\(header.title)")
+                    queuePreview.append("\(note.folderPath)/\(note.title)")
                 }
 
-                if let existingRelativePath = existingIndex.bySourceID[header.noteID] {
+                if let existingRelativePath = existingIndex.bySourceID[note.noteID] {
                     do {
                         try stateStore.upsertNoteState(
-                            noteID: header.noteID,
-                            folderPath: header.folderPath,
+                            noteID: note.noteID,
+                            folderPath: note.folderPath,
                             contentHash: "exists-skip",
                             markdownRelativePath: existingRelativePath,
                             isDeleted: false
                         )
                         skipped += 1
-                        processed += 1
                         progress?(
                             SyncProgress(
                                 stage: .noteProcessed,
-                                total: max(scanned, processed),
-                                processed: processed,
+                                total: total,
+                                totalKnown: totalKnown,
+                                scanned: scanned,
+                                synced: synced,
                                 pending: 0,
-                                currentNote: header.title,
+                                currentNote: note.title,
                                 eventType: .skipped,
                                 outputFile: existingRelativePath,
                                 message: "Skipped existing note",
@@ -82,15 +87,16 @@ final class SyncEngine {
                         )
                     } catch {
                         errors += 1
-                        processed += 1
                         self.logger.error("note failed while upserting skip state: \(error.localizedDescription)")
                         progress?(
                             SyncProgress(
                                 stage: .noteProcessed,
-                                total: max(scanned, processed),
-                                processed: processed,
+                                total: total,
+                                totalKnown: totalKnown,
+                                scanned: scanned,
+                                synced: synced,
                                 pending: 0,
-                                currentNote: header.title,
+                                currentNote: note.title,
                                 eventType: .failed,
                                 outputFile: nil,
                                 message: "Failed note: \(error.localizedDescription)",
@@ -102,11 +108,6 @@ final class SyncEngine {
                 }
 
                 do {
-                    let note = try self.bridge.fetchNoteDetails(
-                        noteID: header.noteID,
-                        fallback: header,
-                        excludeRecentlyDeleted: settings.excludeRecentlyDeleted
-                    )
                     let rendered = self.transformer.render(note: note, outputRoot: outputRoot, runDate: start)
                     let relativePath = try self.resolveUniqueMarkdownPath(
                         baseFolder: rendered.folderPath,
@@ -129,7 +130,7 @@ final class SyncEngine {
                     }
 
                     try stateStore.upsertNoteState(
-                        noteID: header.noteID,
+                        noteID: note.noteID,
                         folderPath: rendered.folderPath,
                         contentHash: self.hash(rendered.markdown),
                         markdownRelativePath: relativePath,
@@ -137,14 +138,16 @@ final class SyncEngine {
                     )
 
                     added += 1
-                    processed += 1
+                    synced += 1
                     progress?(
                         SyncProgress(
                             stage: .noteProcessed,
-                            total: max(scanned, processed),
-                            processed: processed,
+                            total: total,
+                            totalKnown: totalKnown,
+                            scanned: scanned,
+                            synced: synced,
                             pending: 0,
-                            currentNote: header.title,
+                            currentNote: note.title,
                             eventType: .added,
                             outputFile: relativePath,
                             message: "Added note",
@@ -153,15 +156,16 @@ final class SyncEngine {
                     )
                 } catch {
                     errors += 1
-                    processed += 1
                     self.logger.error("note failed: \(error.localizedDescription)")
                     progress?(
                         SyncProgress(
                             stage: .noteProcessed,
-                            total: max(scanned, processed),
-                            processed: processed,
+                            total: total,
+                            totalKnown: totalKnown,
+                            scanned: scanned,
+                            synced: synced,
                             pending: 0,
-                            currentNote: header.title,
+                            currentNote: note.title,
                             eventType: .failed,
                             outputFile: nil,
                             message: "Failed note: \(error.localizedDescription)",
@@ -174,8 +178,10 @@ final class SyncEngine {
                 progress?(
                     SyncProgress(
                         stage: .fetching,
-                        total: max(scanned, processed),
-                        processed: processed,
+                        total: total,
+                        totalKnown: false,
+                        scanned: bridgeProgress.scannedCount,
+                        synced: synced,
                         pending: 0,
                         currentNote: nil,
                         eventType: nil,
@@ -187,13 +193,16 @@ final class SyncEngine {
             }
         )
 
-        let total = max(bridgeSummary.totalNotes, max(scanned, processed))
+        total = max(bridgeSummary.totalNotes, scanned)
+        totalKnown = true
         progress?(
             SyncProgress(
                 stage: .queueReady,
                 total: total,
-                processed: processed,
-                pending: 0,
+                totalKnown: true,
+                scanned: scanned,
+                synced: synced,
+                pending: max(total - synced, 0),
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,
@@ -217,8 +226,10 @@ final class SyncEngine {
             SyncProgress(
                 stage: .completed,
                 total: total,
-                processed: processed,
-                pending: 0,
+                totalKnown: true,
+                scanned: scanned,
+                synced: synced,
+                pending: max(total - synced, 0),
                 currentNote: nil,
                 eventType: nil,
                 outputFile: nil,

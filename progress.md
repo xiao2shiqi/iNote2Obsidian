@@ -260,3 +260,21 @@ A working CLI MVP exists and is used as the migration baseline.
   - Updated the pending card to show `--` plus a `Calculating...` hint until the queue size is known.
   - Added a realtime detail message that explains when Apple Notes is still being scanned and the remaining count is not ready yet.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+
+## Iteration Note (2026-03-07, Single-Pass Sync Throughput Refactor)
+- Goal:
+  - Remove the `O(n^2)` sync behavior caused by header streaming followed by per-note full Apple Notes re-traversal.
+- Approach:
+  - Replace the header-first path with a single `osascript` process that streams complete note payloads in one pass.
+  - Restrict sync indexing and writes to a fixed managed subdirectory `apple-Notes` under the user-selected vault root.
+  - Separate realtime progress semantics into `scanned`, `synced`, and `pending`.
+- Completed:
+  - Replaced `streamNoteHeaders(...) + fetchNoteDetails(...)` with a single-pass `streamNotes(...)` bridge.
+  - Updated JXA payload emission to output note metadata plus `body_plain` in the same traversal, keeping `body_html` optional and empty in the current stable path.
+  - Changed `AppSettings.outputRootPath` semantics to vault root and added derived managed output path `apple-Notes`.
+  - Updated `SyncEngine` to read/write/index only inside the managed `apple-Notes` directory, avoiding recursive scans across the whole Obsidian vault.
+  - Updated the settings UI to show the selected vault root and the effective managed output path.
+  - Updated realtime progress UI and view model logic so scan stage shows `Scanned`, while known-total stage shows `Synced` and accurate `Pending`.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+- Remaining:
+  - Validate perceived speed improvement against a real Apple Notes library and restore richer body/attachment export later without losing the single-pass performance profile.

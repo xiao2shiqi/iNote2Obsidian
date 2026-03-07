@@ -14,7 +14,8 @@ final class AppViewModel: ObservableObject {
     @Published var wavePhase: CGFloat = 0
     @Published var syncRoundsCompleted: Int = 0
     @Published var totalInCurrentRun: Int = 0
-    @Published var processedInCurrentRun: Int = 0
+    @Published var scannedInCurrentRun: Int = 0
+    @Published var syncedInCurrentRun: Int = 0
     @Published var pendingInCurrentRun: Int = 0
     @Published var isPendingCountAvailable: Bool = false
     @Published var pendingQueuePreview: [String] = []
@@ -285,6 +286,18 @@ final class AppViewModel: ObservableObject {
         isPendingCountAvailable ? "\(pendingInCurrentRun)" : "--"
     }
 
+    var primaryMetricTitle: String {
+        isPendingCountAvailable ? t(.synced) : t(.scanned)
+    }
+
+    var primaryMetricValue: String {
+        isPendingCountAvailable ? "\(syncedInCurrentRun)" : "\(scannedInCurrentRun)"
+    }
+
+    var managedOutputRootPath: String {
+        settings.managedOutputRootPath
+    }
+
     var realtimeDetailMessage: String {
         if status == .syncing && !isPendingCountAvailable {
             return t(.messageScanningRealtime)
@@ -365,7 +378,8 @@ final class AppViewModel: ObservableObject {
 
     private func resetRealtimeRunState() {
         totalInCurrentRun = 0
-        processedInCurrentRun = 0
+        scannedInCurrentRun = 0
+        syncedInCurrentRun = 0
         pendingInCurrentRun = 0
         isPendingCountAvailable = false
         pendingQueuePreview = []
@@ -375,12 +389,13 @@ final class AppViewModel: ObservableObject {
 
     private func applyProgress(_ progress: SyncProgress) {
         totalInCurrentRun = progress.total
-        processedInCurrentRun = progress.processed
+        scannedInCurrentRun = progress.scanned
+        syncedInCurrentRun = progress.synced
         pendingInCurrentRun = progress.pending
+        isPendingCountAvailable = progress.totalKnown
 
         switch progress.stage {
         case .fetching:
-            isPendingCountAvailable = false
             if let message = progress.message, message.hasPrefix("SCANNED:") {
                 let countText = String(message.dropFirst("SCANNED:".count))
                 if let count = Int(countText) {
@@ -397,14 +412,10 @@ final class AppViewModel: ObservableObject {
                 appendLog(progress.message ?? "Fetching notes (streaming)...")
             }
         case .queueReady:
-            isPendingCountAvailable = true
             pendingQueuePreview = progress.queuePreview
             statusMessage = "\(t(.messageQueueReady)) \(progress.total)"
             appendLog("Queue prepared: \(progress.total) notes")
         case .noteProcessed:
-            if progress.total > 0 {
-                isPendingCountAvailable = true
-            }
             if let file = progress.outputFile {
                 prependRecentFile(file)
             }
@@ -417,10 +428,11 @@ final class AppViewModel: ObservableObject {
                 case .failed: label = "failed"
                 }
                 let note = progress.currentNote ?? "Unknown"
-                appendLog("[\(progress.processed)/\(progress.total)] \(label): \(note)")
+                let totalLabel = progress.totalKnown ? "\(progress.total)" : "?"
+                let progressLabel = progress.totalKnown ? "\(progress.synced)/\(totalLabel)" : "scan \(progress.scanned)"
+                appendLog("[\(progressLabel)] \(label): \(note)")
             }
         case .completed:
-            isPendingCountAvailable = true
             statusMessage = t(.messageSyncCompleted)
             appendLog("Run completed")
         }

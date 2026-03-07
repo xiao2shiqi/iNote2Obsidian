@@ -14,6 +14,8 @@ enum L10nKey: Hashable, CaseIterable {
     case recentError
 
     case realtimePanel
+    case scanned
+    case synced
     case rounds
     case total
     case processed
@@ -27,6 +29,7 @@ enum L10nKey: Hashable, CaseIterable {
 
     case outputDirectory
     case chooseDirectory
+    case managedOutputLocation
     case syncOptions
     case interval
     case excludeRecentlyDeleted
@@ -95,6 +98,8 @@ struct AppLocalizer {
             .recentError: "Recent Error",
 
             .realtimePanel: "Realtime",
+            .scanned: "Scanned",
+            .synced: "Synced",
             .rounds: "Rounds",
             .total: "Total",
             .processed: "Processed",
@@ -108,6 +113,7 @@ struct AppLocalizer {
 
             .outputDirectory: "Output Directory",
             .chooseDirectory: "Choose Directory",
+            .managedOutputLocation: "Apple Notes will be managed in %@",
             .syncOptions: "Sync Options",
             .interval: "Interval",
             .excludeRecentlyDeleted: "Exclude Recently Deleted",
@@ -164,6 +170,8 @@ struct AppLocalizer {
             .recentError: "最近错误",
 
             .realtimePanel: "实时面板",
+            .scanned: "已扫描",
+            .synced: "已同步",
             .rounds: "轮次",
             .total: "总量",
             .processed: "已处理",
@@ -177,6 +185,7 @@ struct AppLocalizer {
 
             .outputDirectory: "输出目录",
             .chooseDirectory: "选择目录",
+            .managedOutputLocation: "Apple Notes 将写入受控子目录：%@",
             .syncOptions: "同步选项",
             .interval: "间隔",
             .excludeRecentlyDeleted: "排除 Recently Deleted",
