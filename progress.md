@@ -53,6 +53,7 @@ iNote2Obsidian 的当前目标是构建一个原生 macOS 菜单栏应用，将 
   - Markdown 输出与统一 `attachments/` 资源目录
 - `README.md` 与 `README.zh-CN.md` 已同步更新为新方案
 - 新增 `MIT` 开源协议，并补充 README 中的项目背景说明
+- 在 README 中补充未签名版本的安装说明，明确通过“打开”或“仍要打开”继续运行
 
 ## 当前状态
 

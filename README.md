@@ -47,6 +47,25 @@ cd NativeApp
 swift build
 ```
 
+## Install Unsigned Builds
+
+Current preview builds may be unsigned.
+
+If macOS blocks the app after download:
+
+1. In Finder, locate `iNote2Obsidian.app`
+2. Right-click the app and choose `Open`
+3. In the confirmation dialog, click `Open`
+
+If macOS still blocks it:
+
+1. Open `System Settings`
+2. Go to `Privacy & Security`
+3. Find the blocked app message near the bottom
+4. Click `Open Anyway`
+
+This means the user explicitly trusts the app on their own Mac.
+
 ## Current Implementation Notes
 
 - Sync is implemented as a menu bar app with 1-second polling
