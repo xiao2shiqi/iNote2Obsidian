@@ -7,7 +7,7 @@ struct MarkdownRenderer {
         noteRelativePath: String,
         assetRelativeDir: String
     ) -> RenderedNote {
-        let extracted = extractImages(from: note.htmlBody, assetRelativeDir: assetRelativeDir)
+        let extracted = extractImages(from: note.htmlBody, stableBaseName: stableBaseName)
         let relativeAssetsPath = relativePath(from: noteRelativePath, to: assetRelativeDir)
 
         var lines: [String] = [
@@ -71,7 +71,7 @@ struct MarkdownRenderer {
         return prefix.isEmpty ? assetRelativeDir : "\(prefix)/\(assetRelativeDir)"
     }
 
-    private func extractImages(from html: String, assetRelativeDir: String) -> (assets: [(filename: String, data: Data)], warnings: [String]) {
+    private func extractImages(from html: String, stableBaseName: String) -> (assets: [(filename: String, data: Data)], warnings: [String]) {
         guard !html.isEmpty else {
             return ([], [])
         }
@@ -89,7 +89,7 @@ struct MarkdownRenderer {
         for (index, match) in matches.enumerated() {
             guard match.numberOfRanges > 1 else { continue }
             let src = nsHTML.substring(with: match.range(at: 1))
-            if let parsed = decodeImageSource(src: src, index: index + 1) {
+            if let parsed = decodeImageSource(src: src, stableBaseName: stableBaseName, index: index + 1) {
                 assets.append(parsed)
             } else {
                 warnings.append("Skipped unsupported image source: \(src.prefix(80))")
@@ -99,7 +99,7 @@ struct MarkdownRenderer {
         return (assets, warnings)
     }
 
-    private func decodeImageSource(src: String, index: Int) -> (filename: String, data: Data)? {
+    private func decodeImageSource(src: String, stableBaseName: String, index: Int) -> (filename: String, data: Data)? {
         if src.hasPrefix("data:image/"), let comma = src.firstIndex(of: ",") {
             let header = String(src[..<comma])
             let payload = String(src[src.index(after: comma)...])
@@ -108,12 +108,12 @@ struct MarkdownRenderer {
                 .components(separatedBy: ";")
                 .first ?? "image/png"
             guard let data = Data(base64Encoded: payload) else { return nil }
-            return ("\(index).\(fileExtension(for: mime))", data)
+            return ("\(stableBaseName)-\(index).\(fileExtension(for: mime))", data)
         }
 
         if src.hasPrefix("file://"), let url = URL(string: src), let data = try? Data(contentsOf: url) {
             let ext = url.pathExtension.isEmpty ? "bin" : sanitizePathComponent(url.pathExtension)
-            return ("\(index).\(ext)", data)
+            return ("\(stableBaseName)-\(index).\(ext)", data)
         }
 
         return nil

@@ -84,7 +84,7 @@ struct SyncPlanner {
 
         let folder = sanitizeFolderPath(header.folderPath)
         let noteRelativePath = folder.isEmpty ? "\(baseName).md" : "\(folder)/\(baseName).md"
-        let assetRelativeDir = "\(settings.attachmentsFolderName)/\(baseName)"
+        let assetRelativeDir = settings.attachmentsFolderName
 
         guard let state else {
             return PendingSync(
@@ -139,7 +139,7 @@ struct SyncPlanner {
 
             let folder = sanitizeFolderPath(note.folderPath)
             let noteRelativePath = folder.isEmpty ? "\(baseName).md" : "\(folder)/\(baseName).md"
-            let assetRelativeDir = "\(settings.attachmentsFolderName)/\(baseName)"
+            let assetRelativeDir = settings.attachmentsFolderName
             let planned = PlannedNote(
                 note: note,
                 stableBaseName: baseName,
@@ -274,7 +274,7 @@ final class SyncEngine: @unchecked Sendable {
                     let baseName = initialState.allocateBaseName(for: note.createdAt, planner: self.planner)
                     let folder = self.planner.sanitizeFolderPath(note.folderPath)
                     let noteRelativePath = folder.isEmpty ? "\(baseName).md" : "\(folder)/\(baseName).md"
-                    let assetRelativeDir = "\(settings.attachmentsFolderName)/\(baseName)"
+                    let assetRelativeDir = settings.attachmentsFolderName
                     let planned = PlannedNote(
                         note: note,
                         stableBaseName: baseName,
@@ -307,7 +307,7 @@ final class SyncEngine: @unchecked Sendable {
                         let baseName = initialState.allocateBaseName(for: note.createdAt, planner: self.planner)
                         let folder = self.planner.sanitizeFolderPath(note.folderPath)
                         let noteRelativePath = folder.isEmpty ? "\(baseName).md" : "\(folder)/\(baseName).md"
-                        let assetRelativeDir = "\(settings.attachmentsFolderName)/\(baseName)"
+                        let assetRelativeDir = settings.attachmentsFolderName
                         let planned = PlannedNote(
                             note: note,
                             stableBaseName: baseName,
@@ -465,7 +465,8 @@ final class SyncEngine: @unchecked Sendable {
         let markdownURL = vaultURL.appendingPathComponent(planned.noteRelativePath)
         try fileManager.createDirectory(at: markdownURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let assetDirURL = vaultURL.appendingPathComponent(planned.assetRelativeDir, isDirectory: true)
-        try recreateDirectory(at: assetDirURL)
+        try fileManager.createDirectory(at: assetDirURL, withIntermediateDirectories: true)
+        try removeManagedAssets(for: planned.stableBaseName, assetRootURL: assetDirURL)
 
         for asset in rendered.assets {
             let target = vaultURL.appendingPathComponent(asset.relativePath)
@@ -481,21 +482,23 @@ final class SyncEngine: @unchecked Sendable {
         try fileManager.moveItem(at: tempURL, to: markdownURL)
     }
 
-    private func recreateDirectory(at url: URL) throws {
-        if fileManager.fileExists(atPath: url.path) {
-            try fileManager.removeItem(at: url)
-        }
-        try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
-    }
-
     private func removeRenderedFiles(for state: ManagedNoteState, vaultURL: URL) throws {
         let markdownURL = vaultURL.appendingPathComponent(state.noteRelativePath)
         if fileManager.fileExists(atPath: markdownURL.path) {
             try fileManager.removeItem(at: markdownURL)
         }
-        let assetURL = vaultURL.appendingPathComponent(state.assetRelativeDir)
-        if fileManager.fileExists(atPath: assetURL.path) {
-            try fileManager.removeItem(at: assetURL)
+        let assetRootURL = vaultURL.appendingPathComponent(state.assetRelativeDir)
+        if fileManager.fileExists(atPath: assetRootURL.path) {
+            try removeManagedAssets(for: Self.baseName(from: state.noteRelativePath), assetRootURL: assetRootURL)
+        }
+    }
+
+    private func removeManagedAssets(for stableBaseName: String, assetRootURL: URL) throws {
+        guard fileManager.fileExists(atPath: assetRootURL.path) else { return }
+        let children = try fileManager.contentsOfDirectory(at: assetRootURL, includingPropertiesForKeys: nil)
+        let prefix = "\(stableBaseName)-"
+        for child in children where child.lastPathComponent.hasPrefix(prefix) {
+            try fileManager.removeItem(at: child)
         }
     }
 

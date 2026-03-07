@@ -21,7 +21,7 @@ iNote2Obsidian 的当前目标是构建一个原生 macOS 菜单栏应用，将 
 - 同一条 Apple Note 后续修改时覆盖原 Markdown 文件
 - Apple Notes 删除后，删除对应的 Obsidian Markdown 和资源
 - Apple Notes 文件夹重命名或移动后，Obsidian 对应目录也跟着迁移
-- 所有资源统一放到 vault 根目录下的 `attachments/`
+- 所有资源统一直接放到 vault 根目录下的 `attachments/`，不创建笔记级二级目录
 - 应用内提供 `sync log`，能看到写入、更新、移动、删除和错误
 
 ## v1 技术决策

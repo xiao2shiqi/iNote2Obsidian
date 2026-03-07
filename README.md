@@ -21,7 +21,7 @@ English | [中文](README.zh-CN.md)
 - Reuse the same Markdown file when a note is updated
 - Delete the mirrored Markdown and assets when the source note is deleted
 - Move mirrored files when Apple Notes folders are renamed or moved
-- Store note assets under a shared vault root folder: `attachments/`
+- Store all note assets directly under the shared vault root folder: `attachments/`
 - Show sync activity in an in-app sync log
 
 ## Repository Layout

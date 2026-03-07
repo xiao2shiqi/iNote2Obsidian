@@ -21,7 +21,7 @@
 - 同一条笔记更新时覆盖原有 Markdown 文件
 - Apple Notes 删除后，删除对应的 Markdown 和资源
 - Apple Notes 目录重命名或移动后，对应文件一起迁移
-- 所有资源统一存放在 vault 根目录下的 `attachments/`
+- 所有资源统一直接存放在 vault 根目录下的 `attachments/`，不再创建笔记级二级目录
 - 在应用内展示同步日志
 
 ## 仓库结构
