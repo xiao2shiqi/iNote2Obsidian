@@ -291,3 +291,23 @@ A working CLI MVP exists and is used as the migration baseline.
   - Updated `SyncEngine` to check cancellation during note processing and before tombstone cleanup.
   - Updated `NotesBridge.streamNotes(...)` to terminate the running bridge process when cancellation is requested.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
+
+## Iteration Note (2026-03-07, Missing-Three Integrity Fix)
+- Goal:
+  - Eliminate the persistent `275 total / 272 synced / 3 pending` integrity gap in the single-pass bridge.
+- Root Cause:
+  - `NotesBridge` previously converted arbitrary pipe chunks directly into `String`.
+  - When a read chunk ended in the middle of a multi-byte UTF-8 sequence, that chunk decode failed and the entire chunk was silently dropped.
+  - This caused valid `NOTE` events to disappear before they reached `SyncEngine`, especially for notes containing Chinese text and special Unicode separators.
+- Completed:
+  - Reworked the stream parser to buffer raw `Data` and split on newline bytes before decoding each complete event line as UTF-8.
+  - Revalidated the bridge callback count and confirmed `onNote_count=275` with `total=275`.
+  - Re-ran a full export into `/Users/phoenix/Library/Mobile Documents/iCloud~md~obsidian/Documents/life-diary/apple-Notes`.
+  - Revalidated final sync result and confirmed:
+    - Apple Notes count: `275`
+    - Exported markdown count: `275`
+    - Missing: `0`
+    - Extra: `0`
+    - Duplicate `source_note_id`: `0`
+- Remaining:
+  - The fallback retry path for per-note bridge failures is still kept in place as a defense-in-depth mechanism, even though the primary missing-three issue is now resolved at the parser layer.
