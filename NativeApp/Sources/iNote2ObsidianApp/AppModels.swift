@@ -46,6 +46,14 @@ struct SourceNote: Equatable {
     var htmlBody: String
 }
 
+struct SourceNoteHeader: Equatable {
+    var appleNoteID: String
+    var title: String
+    var folderPath: String
+    var createdAt: Date
+    var updatedAt: Date
+}
+
 struct RenderedAsset: Equatable {
     var relativePath: String
     var data: Data

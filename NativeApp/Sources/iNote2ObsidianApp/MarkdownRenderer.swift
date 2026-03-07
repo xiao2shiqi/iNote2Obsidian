@@ -28,7 +28,7 @@ struct MarkdownRenderer {
             lines.append("")
         }
 
-        let trimmedBody = note.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBody = effectivePlainText(for: note).trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedBody.isEmpty {
             lines.append(trimmedBody)
         }
@@ -49,11 +49,19 @@ struct MarkdownRenderer {
 
         return RenderedNote(
             markdown: markdown,
-            contentHash: hashStrings([note.title, note.plainText, note.htmlBody]),
+            contentHash: hashStrings([note.title, effectivePlainText(for: note), note.htmlBody]),
             assetManifestHash: assetManifestHash,
             assets: assets,
             warnings: extracted.warnings
         )
+    }
+
+    private func effectivePlainText(for note: SourceNote) -> String {
+        let text = note.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            return text
+        }
+        return stripHTML(note.htmlBody)
     }
 
     private func relativePath(from noteRelativePath: String, to assetRelativeDir: String) -> String {
@@ -142,6 +150,22 @@ struct MarkdownRenderer {
 
     private func sanitizePathComponent(_ string: String) -> String {
         string.components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
+
+    private func stripHTML(_ html: String) -> String {
+        guard !html.isEmpty else { return "" }
+        let withoutTags = html.replacingOccurrences(
+            of: "<[^>]+>",
+            with: " ",
+            options: .regularExpression
+        )
+        let decoded = withoutTags
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+        return decoded.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 
     private static func isoString(_ date: Date) -> String {

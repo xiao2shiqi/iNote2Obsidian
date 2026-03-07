@@ -17,13 +17,21 @@ final class AppSettingsStore {
     }
 
     func load() -> AppSettings {
-        guard
-            let data = try? Data(contentsOf: settingsURL),
-            let settings = try? JSONDecoder().decode(AppSettings.self, from: data)
-        else {
+        guard let data = try? Data(contentsOf: settingsURL) else {
             return .default
         }
-        return settings
+        if let settings = try? JSONDecoder().decode(AppSettings.self, from: data) {
+            return settings
+        }
+        if let legacy = try? JSONDecoder().decode(LegacySettings.self, from: data) {
+            return AppSettings(
+                vaultPath: legacy.outputRootPath,
+                attachmentsFolderName: "attachments",
+                pollIntervalSeconds: legacy.syncInterval == "1s" ? 1 : 1,
+                lastRunMode: legacy.lastRunMode == "running" ? .running : .stopped
+            )
+        }
+        return .default
     }
 
     func save(_ settings: AppSettings) throws {
@@ -34,4 +42,10 @@ final class AppSettingsStore {
     var stateDirectory: URL {
         appSupportDirectory.appendingPathComponent("State", isDirectory: true)
     }
+}
+
+private struct LegacySettings: Decodable {
+    var outputRootPath: String
+    var syncInterval: String
+    var lastRunMode: String
 }

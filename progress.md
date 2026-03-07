@@ -58,13 +58,18 @@ iNote2Obsidian 的当前目标是构建一个原生 macOS 菜单栏应用，将 
 - `swift build` 在 `NativeApp/` 下可通过
 - 当前实现已能构建新的产品骨架和核心同步流程
 - 图片提取目前支持可从 HTML 中解析出的 `data:` 和本地 `file://` 图片来源
+- 2026-03-07 真实集成测试结果：
+  - 使用目录 `/Volumes/MOVESPEED/Document-External/iNote` 作为验收输出目录
+  - Apple Notes 当前有效笔记数为 `275`
+  - 首轮全量同步完成：`scanned=275 created=275 errors=0 duration=216.46s`
+  - 第二轮重复同步完成：`scanned=275 created=0 updated=0 moved=0 deleted=0 errors=0 duration=42.72s`
 
 ## 当前缺口
 
 - 还未完成真实设备上的大规模 1000 条笔记压力验证
 - 还未完成登录启动、签名、安装包发布链路
 - 还未验证所有 Apple Notes 富文本和附件类型
-- 当前命令行 Swift 工具链缺少可用测试模块，因此本轮以 `swift build` 作为自动化构建验证
+- 当前命令行 Swift 工具链缺少可用测试模块，因此本轮以 `swift build` 和真实集成测试作为验证
 
 ## 下一步
 
