@@ -336,3 +336,11 @@ A working CLI MVP exists and is used as the migration baseline.
   - Added a native app `1 second` interval option and made it the default.
   - Changed missing-source handling from markdown tombstoning to actual file deletion in the managed output tree.
   - Added empty-folder cleanup after mirrored note deletion.
+
+## Iteration Note (2026-03-07, Header-First Fast Polling)
+- Goal:
+  - Avoid re-reading every note body on each 1-second poll.
+- Completed:
+  - Added a lightweight Apple Notes header stream that emits `note_id`, folder path, and modification time without plaintext bodies.
+  - Persisted `source_updated_at` in native app state to short-circuit unchanged notes.
+  - Changed sync to fetch full note bodies only for new or modified notes, while still deleting missing notes in near realtime.

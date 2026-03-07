@@ -51,34 +51,69 @@ final class SyncEngine {
         try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
         let existingIndex = ExistingNoteIndex.build(outputRoot: outputRoot, logger: logger)
 
-        let bridgeSummary = try bridge.streamNotes(
+        let totalFromHeaders = try bridge.streamNoteHeaders(
             excludeRecentlyDeleted: settings.excludeRecentlyDeleted,
             cancellation: cancellation,
-            onNote: { [self] note in
+            onHeader: { [self] header in
                 if cancellation.isCancelled {
                     return
                 }
                 scanned += 1
-                seenSourceIDs.insert(note.noteID)
+                seenSourceIDs.insert(header.noteID)
 
-                self.processNote(
-                    note,
-                    outputRoot: outputRoot,
-                    start: start,
-                    existingIndex: existingIndex,
-                    stateStore: stateStore,
-                    cancellation: cancellation,
-                    added: &added,
-                    updated: &updated,
-                    skipped: &skipped,
-                    errors: &errors,
-                    matched: &matched,
-                    queuePreview: &queuePreview,
-                    total: total,
-                    totalKnown: totalKnown,
-                    scanned: scanned,
-                    progress: progress
-                )
+                if self.canTreatAsMatched(header: header, stateStore: stateStore, existingIndex: existingIndex) {
+                    skipped += 1
+                    matched += 1
+                    progress?(
+                        SyncProgress(
+                            stage: .noteProcessed,
+                            total: total,
+                            totalKnown: totalKnown,
+                            scanned: scanned,
+                            matched: matched,
+                            pending: max(scanned - matched, 0),
+                            currentNote: header.title,
+                            eventType: .skipped,
+                            outputFile: existingIndex.bySourceID[header.noteID]?.relativePath,
+                            message: "Matched existing note",
+                            queuePreview: []
+                        )
+                    )
+                    return
+                }
+
+                if queuePreview.count < 30 {
+                    queuePreview.append("\(header.folderPath)/\(header.title)")
+                }
+
+                do {
+                    guard let note = try bridge.fetchNoteDetails(noteID: header.noteID, cancellation: cancellation) else {
+                        errors += 1
+                        logger.error("detail fetch returned empty for note: \(header.noteID)")
+                        return
+                    }
+                    self.processNote(
+                        note,
+                        outputRoot: outputRoot,
+                        start: start,
+                        existingIndex: existingIndex,
+                        stateStore: stateStore,
+                        cancellation: cancellation,
+                        added: &added,
+                        updated: &updated,
+                        skipped: &skipped,
+                        errors: &errors,
+                        matched: &matched,
+                        queuePreview: &queuePreview,
+                        total: total,
+                        totalKnown: totalKnown,
+                        scanned: scanned,
+                        progress: progress
+                    )
+                } catch {
+                    errors += 1
+                    logger.error("detail fetch failed for \(header.noteID): \(error.localizedDescription)")
+                }
             },
             onProgress: { bridgeProgress in
                 if cancellation.isCancelled {
@@ -106,44 +141,8 @@ final class SyncEngine {
             throw SyncError.cancelled
         }
 
-        total = max(bridgeSummary.totalNotes, scanned)
+        total = max(totalFromHeaders, scanned)
         totalKnown = true
-
-        for failed in bridgeSummary.failedNotes {
-            if cancellation.isCancelled {
-                throw SyncError.cancelled
-            }
-            logger.info("retrying failed streamed note: \(failed.noteID)")
-            do {
-                guard let note = try bridge.fetchNoteDetails(noteID: failed.noteID, cancellation: cancellation) else {
-                    errors += 1
-                    logger.error("fallback fetch returned empty for note: \(failed.noteID)")
-                    continue
-                }
-                seenSourceIDs.insert(note.noteID)
-                processNote(
-                    note,
-                    outputRoot: outputRoot,
-                    start: start,
-                    existingIndex: existingIndex,
-                    stateStore: stateStore,
-                    cancellation: cancellation,
-                    added: &added,
-                    updated: &updated,
-                    skipped: &skipped,
-                    errors: &errors,
-                    matched: &matched,
-                    queuePreview: &queuePreview,
-                    total: total,
-                    totalKnown: totalKnown,
-                    scanned: scanned,
-                    progress: progress
-                )
-            } catch {
-                errors += 1
-                logger.error("fallback note retry failed for \(failed.noteID): \(error.localizedDescription)")
-            }
-        }
         progress?(
             SyncProgress(
                 stage: .queueReady,
@@ -231,6 +230,30 @@ final class SyncEngine {
         return ExistingNoteIndex.extractSourceNoteID(fromMarkdown: text)
     }
 
+    private func canTreatAsMatched(
+        header: SourceNoteHeader,
+        stateStore: StateStore,
+        existingIndex: ExistingNoteIndex
+    ) -> Bool {
+        guard let previous = try? stateStore.getNoteState(noteID: header.noteID) else {
+            return false
+        }
+        guard
+            !previous.isDeleted,
+            previous.sourceUpdatedAt == isoString(header.updatedAt),
+            let existing = existingIndex.bySourceID[header.noteID],
+            existing.relativePath == previous.markdownRelativePath,
+            existing.contentHash == previous.contentHash
+        else {
+            return false
+        }
+        return true
+    }
+
+    private func isoString(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
+    }
+
     private func deleteMirroredNote(outputRoot: URL, markdownRelativePath: String) {
         let url = outputRoot.appendingPathComponent(markdownRelativePath)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
@@ -282,6 +305,7 @@ final class SyncEngine {
                 try stateStore.upsertNoteState(
                     noteID: note.noteID,
                     folderPath: note.folderPath,
+                    sourceUpdatedAt: isoString(note.updatedAt),
                     contentHash: contentHash,
                     markdownRelativePath: existing.relativePath,
                     isDeleted: false
@@ -351,6 +375,7 @@ final class SyncEngine {
             try stateStore.upsertNoteState(
                 noteID: note.noteID,
                 folderPath: rendered.folderPath,
+                sourceUpdatedAt: isoString(note.updatedAt),
                 contentHash: contentHash,
                 markdownRelativePath: relativePath,
                 isDeleted: false
