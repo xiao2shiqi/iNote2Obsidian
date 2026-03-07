@@ -31,6 +31,7 @@ final class AppViewModel: ObservableObject {
     private var waveTimer: Timer?
     private var settingsWindow: NSWindow?
     private var lastScannedHeartbeatCount: Int = -1
+    private var currentCancellation: SyncCancellationController?
 
     init() {
         do {
@@ -73,11 +74,15 @@ final class AppViewModel: ObservableObject {
     func stopSyncing() {
         guard runMode == .running else { return }
         scheduler.stop()
+        currentCancellation?.cancel()
+        currentCancellation = nil
         runMode = .stopped
         status = .idle
         syncHealth = .ok
         statusMessage = t(.messageStopped)
+        lastErrorSummary = nil
         stopWave()
+        appendLog("Sync stopped")
         settings.lastRunMode = .stopped
         saveSettings()
     }
@@ -110,6 +115,8 @@ final class AppViewModel: ObservableObject {
         let bridge = self.bridge
         let logger = self.logger
         let stateStore = self.stateStore
+        let cancellation = SyncCancellationController()
+        currentCancellation = cancellation
 
         DispatchQueue.global(qos: .userInitiated).async {
             let engine = SyncEngine(bridge: bridge, logger: logger)
@@ -117,13 +124,18 @@ final class AppViewModel: ObservableObject {
                 let run = try engine.run(
                     settings: currentSettings,
                     stateStore: stateStore,
+                    cancellation: cancellation,
                     progress: { progress in
                         DispatchQueue.main.async {
+                            guard self.currentCancellation === cancellation, self.runMode == .running else { return }
                             self.applyProgress(progress)
                         }
                     }
                 )
                 DispatchQueue.main.async {
+                    guard self.currentCancellation === cancellation else { return }
+                    self.currentCancellation = nil
+                    guard self.runMode == .running else { return }
                     self.lastRun = run
                     self.status = run.status
                     self.statusMessage = self.format(.messageRunResult, "\(run.added)", "\(run.updated)", "\(run.errors)")
@@ -137,6 +149,17 @@ final class AppViewModel: ObservableObject {
                 }
             } catch let err as SyncError {
                 DispatchQueue.main.async {
+                    guard self.currentCancellation === cancellation else { return }
+                    self.currentCancellation = nil
+                    if case .cancelled = err {
+                        self.status = .idle
+                        self.syncHealth = .ok
+                        self.lastErrorSummary = nil
+                        self.statusMessage = self.t(.messageStopped)
+                        self.stopWave()
+                        return
+                    }
+                    guard self.runMode == .running else { return }
                     switch err {
                     case .permissionDenied:
                         self.status = .failedPermission
@@ -151,6 +174,8 @@ final class AppViewModel: ObservableObject {
                         self.lastErrorSummary = self.t(.messageBridgeHeartbeatTimeout)
                         self.statusMessage = self.t(.messageBridgeHeartbeatTimeout)
                         self.appendLog("Bridge timeout: \(detail)")
+                    case .cancelled:
+                        break
                     default:
                         self.status = .failedRuntime
                         self.syncHealth = .warning
@@ -162,6 +187,9 @@ final class AppViewModel: ObservableObject {
                 }
             } catch {
                 DispatchQueue.main.async {
+                    guard self.currentCancellation === cancellation else { return }
+                    self.currentCancellation = nil
+                    guard self.runMode == .running else { return }
                     self.status = .failedRuntime
                     self.syncHealth = .warning
                     self.lastErrorSummary = "\(self.t(.messageSyncFailedWithDetailPrefix))\(error.localizedDescription)"

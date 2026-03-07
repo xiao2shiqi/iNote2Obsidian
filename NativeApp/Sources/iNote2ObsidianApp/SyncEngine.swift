@@ -13,6 +13,7 @@ final class SyncEngine {
     func run(
         settings: AppSettings,
         stateStore: StateStore,
+        cancellation: SyncCancellationController = SyncCancellationController(),
         progress: ((SyncProgress) -> Void)? = nil
     ) throws -> SyncRunStats {
         let start = Date()
@@ -52,7 +53,11 @@ final class SyncEngine {
 
         let bridgeSummary = try bridge.streamNotes(
             excludeRecentlyDeleted: settings.excludeRecentlyDeleted,
+            cancellation: cancellation,
             onNote: { [self] note in
+                if cancellation.isCancelled {
+                    return
+                }
                 scanned += 1
                 seenSourceIDs.insert(note.noteID)
 
@@ -108,6 +113,9 @@ final class SyncEngine {
                 }
 
                 do {
+                    if cancellation.isCancelled {
+                        return
+                    }
                     let rendered = self.transformer.render(note: note, outputRoot: outputRoot, runDate: start)
                     let relativePath = try self.resolveUniqueMarkdownPath(
                         baseFolder: rendered.folderPath,
@@ -175,6 +183,9 @@ final class SyncEngine {
                 }
             },
             onProgress: { bridgeProgress in
+                if cancellation.isCancelled {
+                    return
+                }
                 progress?(
                     SyncProgress(
                         stage: .fetching,
@@ -192,6 +203,10 @@ final class SyncEngine {
                 )
             }
         )
+
+        if cancellation.isCancelled {
+            throw SyncError.cancelled
+        }
 
         total = max(bridgeSummary.totalNotes, scanned)
         totalKnown = true
@@ -213,6 +228,9 @@ final class SyncEngine {
 
         let existing = try stateStore.existingNoteIDs()
         for id in existing where !seenSourceIDs.contains(id) {
+            if cancellation.isCancelled {
+                throw SyncError.cancelled
+            }
             deleted += 1
             try stateStore.markDeleted(noteID: id)
             if let st = try stateStore.getNoteState(noteID: id) {

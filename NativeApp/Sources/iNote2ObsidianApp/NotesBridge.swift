@@ -109,6 +109,7 @@ function run(argv) {
 
     func streamNotes(
         excludeRecentlyDeleted: Bool,
+        cancellation: SyncCancellationController,
         onNote: @escaping (SourceNote) -> Void,
         onProgress: @escaping (BridgeProgress) -> Void
     ) throws -> BridgeSummary {
@@ -140,6 +141,10 @@ function run(argv) {
 
         while process.isRunning {
             Thread.sleep(forTimeInterval: 0.05)
+            if cancellation.isCancelled {
+                process.terminate()
+                throw SyncError.cancelled
+            }
             if let parseErr = parser.parseError {
                 process.terminate()
                 throw SyncError.bridgeFailed("Bridge parse error: \(parseErr)")
@@ -163,6 +168,10 @@ function run(argv) {
         }
 
         parser.flush()
+
+        if cancellation.isCancelled {
+            throw SyncError.cancelled
+        }
 
         if let parseErr = parser.parseError {
             throw SyncError.bridgeFailed("Bridge parse error: \(parseErr)")

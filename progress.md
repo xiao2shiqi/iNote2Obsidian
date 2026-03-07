@@ -278,3 +278,16 @@ A working CLI MVP exists and is used as the migration baseline.
   - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
 - Remaining:
   - Validate perceived speed improvement against a real Apple Notes library and restore richer body/attachment export later without losing the single-pass performance profile.
+
+## Iteration Note (2026-03-07, Stop-Sync Cancellation Fix)
+- Goal:
+  - Make the `Stop Sync` control actually stop the in-flight sync run instead of only changing UI state.
+- Approach:
+  - Add a shared cancellation controller from `AppViewModel` down into `SyncEngine` and `NotesBridge`.
+  - Terminate the active `osascript` bridge process when cancellation is requested and suppress stale completion callbacks from cancelled runs.
+- Completed:
+  - Added `SyncCancellationController` and `SyncError.cancelled`.
+  - Updated `AppViewModel.stopSyncing()` to cancel the active run, stop the animation, and avoid showing stale success/failure results after a cancelled run exits.
+  - Updated `SyncEngine` to check cancellation during note processing and before tombstone cleanup.
+  - Updated `NotesBridge.streamNotes(...)` to terminate the running bridge process when cancellation is requested.
+  - Verified `swift build` and `scripts/native_app_smoke_test.sh` pass.
